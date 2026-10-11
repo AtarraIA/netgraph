@@ -1,0 +1,11 @@
+{
+  "name": "netgraph",
+  "private": true,
+  "description": "Compose, train and inspect neural networks in the browser; export them to PyTorch.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && node --test tests/*.test.mjs",
+    "publish-site": "sh publish-site.sh"
+  }
+}

@@ -1,0 +1,47 @@
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="3" width="8" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="13" width="8" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 6 C14 6 8 16 13 16" fill="none" stroke="#fff" stroke-width="1.8"/></svg>
+      Netgraph
+    </div>
+    <nav class="tools" aria-label="Tools">
+      <button class="tb" id="bUndo" title="Undo" disabled>Undo<kbd>⌘Z</kbd></button>
+      <button class="tb" id="bRedo" title="Redo" disabled>Redo<kbd>⇧⌘Z</kbd></button>
+      <button class="tb" id="bGroup" title="Group selected layers into a block (G)">Group<kbd>G</kbd></button>
+      <button class="tb" id="bUngroup" title="Expand the selected block">Ungroup</button>
+      <button class="tb" id="bDelete" title="Delete selection">Delete</button>
+      <button class="tb" id="bBox" aria-pressed="false" title="Drag on the canvas to select an area">Select area</button>
+      <button class="tb" id="bOpen" title="Open a Netgraph project file (.json)">Open<kbd>⌘O</kbd></button>
+      <button class="tb" id="bSave" title="Save the network, your blocks and the trained weights as a .json file">Save<kbd>⌘S</kbd></button>
+      <button class="tb" id="bImport" title="Import MNIST-style IDX files (.gz or raw)">Import data</button>
+      <button class="tb primary" id="bExport">Export PyTorch</button>
+      <button class="tb" id="bExample">Load example</button>
+      <button class="tb" id="bClear">Clear</button>
+    </nav>
+  </header>
+  <aside class="pal" id="pal" aria-label="Layers and blocks"></aside>
+  <main class="cv" id="cv">
+    <div class="crumbs" id="crumbs"></div>
+    <div class="world" id="world">
+      <svg id="wires"><g id="wg" transform="translate(5000,5000)"></g></svg>
+      <svg id="neuro"><g id="ng" transform="translate(5000,5000)"></g></svg>
+      <div id="nodes"></div>
+    </div>
+    <div class="box" id="box" hidden></div>
+    <div class="zoom">
+      <button id="zout" aria-label="Zoom out">−</button>
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zfit">Fit</button>
+    </div>
+    <aside class="insp" id="insp" aria-label="Properties"></aside>
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+</div>
+<dialog id="dlg">
+  <div class="dh"><h2>PyTorch module</h2><button class="tb" id="dCopy">Copy code</button><button class="tb" id="dPy">Download code (.py)</button><button class="tb primary" id="dWeights" title="The current weights, for model.load_state_dict(load_file(...))">Download weights (.safetensors)</button><button class="tb" id="dClose">Close</button></div>
+  <pre id="dCode"></pre>
+</dialog>
+<div class="ghost" id="ghost" hidden></div>
+<input type="file" id="fileIn" multiple hidden>
+<input type="file" id="projIn" accept=".json,application/json" hidden>
+
