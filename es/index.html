@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Netgraph · Documentación</title>
+<meta name="description" content="Netgraph: compone redes neuronales como un grafo, entrénalas con MNIST en el navegador, mira dentro de cada capa y expórtalas a PyTorch.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cg stroke='%23fff' stroke-width='2' fill='none'%3E%3Ccircle cx='8' cy='9' r='3'/%3E%3Ccircle cx='8' cy='23' r='3'/%3E%3Ccircle cx='24' cy='16' r='3'/%3E%3Cpath d='M11 10l10 5M11 22l10-5'/%3E%3C/g%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><g stroke="#fff" stroke-width="2" fill="none"><circle cx="8" cy="9" r="3"/><circle cx="8" cy="23" r="3"/><circle cx="24" cy="16" r="3"/><path d="M11 10l10 5M11 22l10-5"/></g></svg><span>NETGRAPH</span></a>
+  <nav>
+    <a class="hide-sm" href="#inicio">Inicio</a>
+    <a class="hide-sm" href="#componentes">Componentes</a>
+    <a class="hide-sm" href="#expresiones">Expresiones</a>
+    <a class="hide-sm" href="https://github.com/AtarraIA/netgraph">GitHub</a>
+    <a href="../" lang="en" hreflang="en">English</a>
+    <a class="btn" href="../app/">Abrir la app</a>
+  </nav>
+</header>
+
+<div class="wrap">
+<aside class="toc" aria-label="Contenido">
+  <b>Contenido</b>
+  <a href="#inicio">Primeros pasos</a>
+  <a href="#lienzo">El lienzo</a>
+  <a href="#vistas">Mirar por dentro</a>
+  <a href="#componentes">Componentes</a>
+  <a href="#expresiones">Expresiones</a>
+  <a href="#variables">Variables y deslizadores</a>
+  <a href="#bloques">Bloques</a>
+  <a href="#entrenamiento">Entrenamiento</a>
+  <a href="#datos">Datos, inferencia y recolección</a>
+  <a href="#punteros">Pares de punteros</a>
+  <a href="#analisis">PCA y gráficas</a>
+  <a href="#recetas">Recetas</a>
+  <a href="#archivos">Guardar y exportar</a>
+  <a href="#teclas">Teclado y ratón</a>
+  <a href="#desarrollo">Desarrollo</a>
+</aside>
+
+<main>
+<div class="hero">
+  <h1>Compón redes neuronales.<br>Míralas pensar.</h1>
+  <p class="lead">Netgraph es un entorno para experimentar con redes neuronales que funciona por completo en el navegador. Conecta capas como en un editor de nodos, entrénalas con MNIST, observa cada activación y cada neurona, y exporta el resultado como código de PyTorch con sus pesos.</p>
+  <div class="cta"><a class="btn" href="../app/">Abrir la app →</a><a class="btn ghost" href="https://github.com/AtarraIA/netgraph">Código en GitHub</a></div>
+  <figure class="shot"><img src="../img/classifier.png" alt="Un clasificador de MNIST entrenado en Netgraph: un componente Data con un dígito manuscrito, capas Dense y ReLU con sus activaciones como franjas de color, la salida Softmax como barras y la curva de pérdida."></figure>
+</div>
+
+<div class="cards">
+  <div class="card" style="--c:var(--dense)"><span class="sw"></span><h4>Construye conectando</h4><p>Capas, bloques, uniones y cambios de forma, con las formas verificadas al conectar.</p></div>
+  <div class="card" style="--c:var(--act)"><span class="sw"></span><h4>Mira cada activación</h4><p>Cualquier componente puede mostrar lo que sale de él. Las capas Dense se abren en sus neuronas.</p></div>
+  <div class="card" style="--c:var(--loss)"><span class="sw"></span><h4>Entrena en el navegador</h4><p>Las pérdidas son expresiones sobre componentes. Adam o SGD, por lotes, sin bloquear la página.</p></div>
+  <div class="card" style="--c:var(--ptr)"><span class="sw"></span><h4>Analiza</h4><p>Recolecta activaciones, aplica PCA, grafícalas en 2D o 3D y reutiliza partes entrenadas con punteros.</p></div>
+</div>
+
+<section id="inicio">
+<h2><span class="n">01</span>Primeros pasos</h2>
+<ol class="steps">
+  <li><a href="../app/">Abre la app</a>. En este sitio MNIST (70.000 dígitos manuscritos) se carga solo; la primera vez tarda unos segundos.</li>
+  <li>Pulsa <strong>Load example</strong> en la barra superior para ver un pequeño clasificador convolucional, o empieza con el lienzo vacío: haz clic en <strong>Data</strong> en la paleta de la izquierda y luego en <strong>Dense</strong>, <strong>ReLU</strong> y otra <strong>Dense</strong>. Cada uno se agrega después del componente seleccionado y queda conectado a él.</li>
+  <li>Selecciona el componente Data y marca <strong>Flatten</strong> para que la imagen de 28×28 se convierta en 784 valores para las capas Dense. Pon las <strong>Output features</strong> de la última Dense en 10: un puntaje por dígito.</li>
+  <li>Agrega un <strong>Loss</strong> (paleta, <em>Training</em>). Con la última capa seleccionada empieza como <code>ce(fc2)</code>: entropía cruzada de esos puntajes contra las etiquetas reales.</li>
+  <li>Pulsa <strong>▶ Train</strong> en el Loss. La curva se dibuja mientras entrena; al final de cada época aparece la exactitud en el conjunto de prueba.</li>
+  <li>Selecciona una capa y pulsa <kbd>V</kbd> para ver sus activaciones, o haz doble clic en una capa Dense para ver sus neuronas. Recorre las muestras con <kbd>←</kbd> <kbd>→</kbd> sobre el componente Data.</li>
+</ol>
+<div class="note"><p>Todo se ejecuta en tu navegador: no se sube nada. La red, tus bloques y los pesos entrenados se guardan en el almacenamiento del navegador; usa <strong>Save</strong> para conservar un archivo del proyecto.</p></div>
+</section>
+
+<section id="lienzo">
+<h2><span class="n">02</span>El lienzo</h2>
+<p>La ventana tiene tres partes: la <strong>paleta</strong> a la izquierda, el <strong>lienzo</strong> en el centro y la <strong>ventana de información</strong> a la derecha, que muestra las formas, la configuración y las activaciones del componente seleccionado.</p>
+<ul>
+  <li><strong>Agrega</strong> un componente haciendo clic en la paleta (se coloca y se conecta después del seleccionado) o arrastrándolo al lienzo.</li>
+  <li><strong>Conecta</strong> arrastrando desde un puerto de salida (derecha) a uno de entrada (izquierda). Las formas se verifican: una conexión que no encaja se rechaza explicando por qué. Los puertos se deslizan por el borde para mirar hacia lo que conectan.</li>
+  <li><strong>Dobla</strong> un cable arrastrándolo; doble clic lo endereza. Selecciona un cable y pulsa <kbd>Delete</kbd> para quitarlo.</li>
+  <li><strong>Selecciona</strong> con un clic; <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+clic agrega a la selección; arrastrar con <kbd>Shift</kbd> o <kbd>Ctrl</kbd> sobre el lienzo vacío dibuja un recuadro de selección (o usa <strong>Select area</strong>).</li>
+  <li><strong>Cambia el tamaño</strong> de un componente desde su esquina inferior derecha; doble clic en la esquina lo restablece.</li>
+  <li><strong>Cada entrada es una celda.</strong> En la ventana de información cada entrada muestra el nombre de lo que está conectado. Escribe el nombre de otro componente para reconectar, o una expresión (como <code>fc1[0:10] * 2</code>) para alimentar la entrada con valores calculados en lugar de un cable.</li>
+  <li>Cada componente muestra sus formas, como <code>784 → 128</code>, y explica los problemas en su sitio (en rojo), por ejemplo formas que no coinciden o una entrada sin conectar.</li>
+</ul>
+</section>
+
+<section id="vistas">
+<h2><span class="n">03</span>Mirar por dentro</h2>
+<h3>Modo vista</h3>
+<p>Pulsa <kbd>V</kbd> (o el punto en la esquina inferior izquierda del componente, o <strong>View activations</strong>) para convertir un componente en una vista de lo que produce para la muestra en pantalla. Los vectores se dibujan como franjas horizontales, los mapas de características como mosaicos, las salidas de diez valores como barras con la etiqueta real marcada, y las imágenes en escala de grises. Los colores usan un mapa divergente: azul para negativos, negro cerca de cero, de naranja a blanco para positivos.</p>
+<h3>Neuronas</h3>
+<p>Haz doble clic en una capa Dense (o acércate con el zoom más allá del límite) para verla como neuronas y pesos. El selector <strong>Layers / Neurons</strong> de arriba muestra así una MLP completa. Pasa el cursor por una neurona para resaltar sus conexiones; su valor para la muestra actual está en su color.</p>
+<figure class="shot"><img src="../img/neurons.png" alt="La vista de neuronas de una MLP entrenada: columnas de círculos para las neuronas de entrada, ocultas y de salida, coloreadas según su activación, con líneas para los pesos."></figure>
+<h3>Bloques</h3>
+<p>Haz doble clic en un bloque (o acércate con el zoom) para abrirlo; la ruta de arriba lleva de vuelta. <kbd>Esc</kbd> sube un nivel.</p>
+</section>
+
+<section id="componentes">
+<h2><span class="n">04</span>Componentes</h2>
+<div class="tbl"><table>
+<thead><tr><th>Componente</th><th>Qué hace</th><th>Configuración</th></tr></thead>
+<tbody>
+<tr class="grp"><td colspan="3">Datos</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Data</td><td>Entrega muestras de un conjunto de datos, con sus etiquetas, y guarda una división entrenamiento/prueba. Si algo está conectado a su entrada, <em>recolecta</em>: durante una ejecución de inferencia guarda todo lo que le llega (ver <a href="#datos">Datos</a>). Su caja muestra lo que contiene, como <code>70,000 × 1×28×28</code>.</td><td>Dataset, Flatten, Test split (%), Shuffle seed; Inference: Samples from, How many</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Sliders</td><td>Produce un vector de valores fijados a mano, igual para todas las muestras. El entrenamiento nunca los cambia.</td><td>Nombre, mínimo, paso y máximo de cada deslizador</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Input / Output</td><td>Una entrada de forma fija sin datos (para construir y exportar), y la marca de lo que devuelve la red.</td><td>Input shape, como <code>1,28,28</code></td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Plot 2D</td><td>Gráfica de dispersión de lo que le llega: la muestra en pantalla como un anillo, las filas de una matriz como puntos, y cada muestra que una ejecución de inferencia hace pasar, coloreada por su etiqueta.</td><td>Ejes horizontal y vertical (índices de valores)</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Plot 3D</td><td>Lo mismo en 3D. En modo vista y en la ventana de información: arrastra para girar la cámara, rueda para acercar, <kbd>Shift</kbd>+arrastrar para desplazar, doble clic para restablecer.</td><td>Tres ejes</td></tr>
+<tr class="grp"><td colspan="3">Capas</td></tr>
+<tr><td><span class="fam" style="--c:var(--dense)"></span>Dense</td><td>Capa totalmente conectada sobre la última dimensión. Sin nada conectado, toma su entrada directamente (fija Input features).</td><td>Input features (auto), Output features, Use bias</td></tr>
+<tr><td><span class="fam" style="--c:var(--conv)"></span>Conv2D</td><td>Convolución 2D sobre C×H×W.</td><td>Input channels (auto), Output channels (un número o <code>same</code>), Kernel, Stride, Padding</td></tr>
+<tr><td><span class="fam" style="--c:var(--pool)"></span>MaxPool2D / AvgPool2D</td><td>Agrupación por ventanas en cada canal.</td><td>Kernel, Stride (auto = kernel)</td></tr>
+<tr><td><span class="fam" style="--c:var(--pool)"></span>Global Avg Pool</td><td>Promedia el mapa de cada canal en un valor.</td><td></td></tr>
+<tr><td><span class="fam" style="--c:var(--act)"></span>Activation</td><td>Cualquier función de <code>x</code> escrita como fórmula, como <code>max(x, a*x)</code>; los otros nombres se vuelven deslizadores. ReLU, GELU, Sigmoid, Tanh y Softmax son este mismo componente con su fórmula, y se ejecutan (y exportan) como las versiones nativas.</td><td>Function of x</td></tr>
+<tr><td><span class="fam" style="--c:var(--norm)"></span>BatchNorm</td><td>Normalización por lotes (1D o 2D) con estadísticas acumuladas como en PyTorch: las del lote al entrenar, las acumuladas en lo demás.</td><td></td></tr>
+<tr><td><span class="fam" style="--c:var(--norm)"></span>Dropout</td><td>Anula valores solo durante el entrenamiento.</td><td>Drop probability</td></tr>
+<tr class="grp"><td colspan="3">Forma y unión</td></tr>
+<tr><td><span class="fam" style="--c:var(--shape)"></span>Flatten / Unflatten</td><td>A un vector, y de vuelta a cualquier forma con el mismo número de valores.</td><td>Unflatten: Output shape (<code>auto</code>, o como <code>32,7,7</code>; un <code>-1</code> se calcula solo)</td></tr>
+<tr><td><span class="fam" style="--c:var(--merge)"></span>Add / Concat</td><td>Dos entradas (a, b): suma elemento a elemento, o unión a lo largo de la primera dimensión.</td><td></td></tr>
+<tr><td><span class="fam" style="--c:var(--ptr)"></span>Pointer pair</td><td>Ejecuta de nuevo un tramo de la red sobre otra entrada, con los mismos pesos (ver <a href="#punteros">Pares de punteros</a>).</td><td>Pointer in: Feeds · Pointer out: Pointer in</td></tr>
+<tr><td><span class="fam" style="--c:var(--shape)"></span>PCA</td><td>Análisis de componentes principales de lo que le llega. <strong>Fit</strong> aprende las componentes; luego proyecta cada muestra sobre ellas (ver <a href="#analisis">PCA</a>).</td><td>Components, Fit on (samples)</td></tr>
+<tr class="grp"><td colspan="3">Entrenamiento y bloques</td></tr>
+<tr><td><span class="fam" style="--c:var(--loss)"></span>Loss</td><td>Una expresión sobre componentes; <strong>Train</strong> la minimiza. Muestra la curva de pérdida.</td><td>Expression, Optimizer, Learning rate, Batch size, Epochs</td></tr>
+<tr><td><span class="fam" style="--c:#F2F4F8"></span>Block</td><td>Un grupo de componentes con una entrada y una salida; se abre con doble clic. Incluidos: MLP, Conv block, Residual block; guarda los tuyos en <em>My blocks</em>.</td><td>Variables del bloque (en su Block input)</td></tr>
+</tbody></table></div>
+<p>Los componentes pueden ir en cualquier lugar, también dentro de bloques, incluidos Data y Loss.</p>
+</section>
+
+<section id="expresiones">
+<h2><span class="n">05</span>Expresiones</h2>
+<p>Las pérdidas, las celdas de entrada, las funciones de activación y los punteros usan un pequeño lenguaje de expresiones sobre componentes. El nombre de un componente representa su salida para la muestra (o lote) actual.</p>
+<div class="tbl"><table>
+<thead><tr><th>Escribe</th><th>Significa</th></tr></thead>
+<tbody>
+<tr><td><code>fc1</code></td><td>La salida del componente llamado fc1. Los nombres se buscan primero en el grafo de la expresión y luego en cada bloque que lo rodea.</td></tr>
+<tr><td><code>MLP.fc2</code>, <code>"MLP 2".fc1</code></td><td>Un componente dentro de un bloque (pon entre comillas los nombres con espacios).</td></tr>
+<tr><td><code>fc1[3]</code>, <code>fc1[0:10]</code>, <code>conv1[2, :, 5]</code></td><td>Un valor, un rango, o varias dimensiones a la vez (contando desde 0).</td></tr>
+<tr><td><code>fc1[3].pre_weights</code></td><td>Los pesos que entran a la neurona 3 (un vector, uno por entrada). Sin índice, <code>fc1.pre_weights</code> es la matriz completa neuronas × entradas.</td></tr>
+<tr><td><code>fc1[3].post_weights</code></td><td>Los pesos que salen de la neurona 3 hacia la siguiente capa Dense.</td></tr>
+<tr><td><code>+ − * / ^</code></td><td>Aritmética elemento a elemento; los números y resultados de un solo valor se extienden.</td></tr>
+<tr><td><code>abs log exp sqrt tanh sigmoid relu softmax</code></td><td>Funciones elemento a elemento (softmax sobre los valores).</td></tr>
+<tr><td><code>sum mean max min</code></td><td>Reducciones; <code>max(a, b)</code> y <code>min(a, b)</code> con dos entradas son elemento a elemento.</td></tr>
+<tr><td><code>ce(scores)</code>, <code>nll(probs)</code></td><td>Entropía cruzada contra las etiquetas reales, a partir de puntajes o de probabilidades.</td></tr>
+<tr><td><code>mse(a, b)</code></td><td>Error cuadrático medio.</td></tr>
+</tbody></table></div>
+<p>Escribe un nombre o un punto para ver sugerencias (<kbd>Ctrl</kbd>+<kbd>Espacio</kbd> las abre). Cuando un componente se renombra, se agrupa o se desagrupa, todas las expresiones que lo nombran se actualizan. Una pérdida con muchos valores se promedia.</p>
+<pre><code>ce(fc3)                                  # clasificación
+mse(recon, data1)                        # reconstrucción de un autoencoder
+ce(fc3) + 0.001*sum(fc1.pre_weights^2)   # con regularización de los pesos de fc1
+mean(abs(relu2)) * 0.01 + mse(dec, x)    # código disperso</code></pre>
+</section>
+
+<section id="variables">
+<h2><span class="n">06</span>Variables y deslizadores</h2>
+<ul>
+  <li><strong>En expresiones</strong>, un nombre que no es un componente se vuelve una variable con deslizador (en el componente y en la ventana de información), como <code>k</code> en <code>fc1[k]</code> o <code>alpha</code> en <code>max(x, alpha*x)</code>. Su mínimo, paso y máximo se pueden editar; los botones <kbd>‹</kbd> <kbd>›</kbd> lo mueven un paso. Una celda de entrada que es solo un nombre desconocido se trata como un error de escritura, con una sugerencia.</li>
+  <li><strong>En la configuración</strong>, un nombre en un campo numérico (como <code>n</code> en Output features) también se vuelve deslizador.</li>
+  <li><strong>Variables de bloque</strong>: se declaran en el <em>Block input</em> de un bloque como filas <code>nombre = valor</code>. Un número se vuelve un deslizador en el bloque; una expresión puede usar las filas anteriores. Las capas del bloque pueden usar esos nombres.</li>
+  <li>El componente <strong>Sliders</strong> convierte deslizadores en un vector de salida, para alimentar una red a mano.</li>
+</ul>
+</section>
+
+<section id="bloques">
+<h2><span class="n">07</span>Bloques</h2>
+<p>Selecciona varios componentes y pulsa <kbd>G</kbd> para agruparlos en un bloque; <kbd>Shift</kbd>+<kbd>G</kbd> los desagrupa. Un bloque tiene una entrada y una salida; dentro son los terminales <em>Block input</em> y <em>Block output</em>. Un bloque que contiene su propio componente Data no necesita entrada. <strong>Save to my blocks</strong> guarda un bloque en la paleta para reutilizarlo.</p>
+</section>
+
+<section id="entrenamiento">
+<h2><span class="n">08</span>Entrenamiento</h2>
+<ul>
+  <li>Un <strong>Loss</strong> no tiene cables de entrada: su expresión nombra lo que usa. Las muestras vienen del componente Data que alimenta esos nombres, y para entrenar solo se usa su parte de <em>entrenamiento</em>.</li>
+  <li><strong>Train</strong> se ejecuta en segundo plano, así la página sigue respondiendo. La curva muestra la pérdida de entrenamiento suavizada y, al final de cada época, la pérdida en (hasta 2.000) muestras de prueba, con la exactitud en pérdidas de clasificación. Selecciona el Loss y arrastra su gráfica para desplazarla, usa la rueda para acercar y doble clic para verla completa.</li>
+  <li><strong>Evaluate on test set</strong> evalúa toda la parte de prueba. <strong>Reset weights</strong> vuelve a empezar con pesos aleatorios nuevos.</li>
+  <li>Adam (valores por defecto de PyTorch) o SGD con momento 0,9; los pesos se inician como en PyTorch. Un conjunto de pruebas compara salidas, gradientes, estadísticas de BatchNorm y pasos del optimizador con PyTorch real.</li>
+  <li>Pueden coexistir varias pérdidas; una pérdida puede usar el valor de otra.</li>
+</ul>
+</section>
+
+<section id="datos">
+<h2><span class="n">09</span>Datos, inferencia y recolección</h2>
+<p><strong>Import data</strong> lee archivos IDX (el formato de MNIST, comprimidos o no): elige un archivo de imágenes junto con su archivo de etiquetas, o suéltalos en el lienzo. El conjunto queda guardado en el navegador. Cada componente Data lo baraja con su semilla y separa una parte para prueba.</p>
+<h3>Recolectar activaciones</h3>
+<p>Un componente Data con algo conectado a su entrada <strong>recolecta</strong>. Conecta, por ejemplo, la capa del medio de un autoencoder a un componente Data nuevo. Luego selecciona el componente Data donde empieza el flujo y, en <strong>Inference</strong>, elige <em>Samples from</em> (parte de prueba, de entrenamiento o todo el conjunto) y <em>How many</em>, y pulsa <strong>▶ Run inference</strong>. El componente que recolecta guarda cada muestra que le llegó, con su etiqueta real, como un conjunto de datos propio: puedes recorrerlo, verlo, graficarlo o entrenar otra red con él. Las gráficas conectadas más adelante se llenan de la misma forma.</p>
+</section>
+
+<section id="punteros">
+<h2><span class="n">10</span>Pares de punteros</h2>
+<p>Un par de punteros ejecuta de nuevo un tramo de la red, sobre otra entrada, con los mismos pesos. Uso típico: alimentar un decodificador entrenado con deslizadores, sin separarlo de su codificador.</p>
+<ol class="steps">
+  <li>Agrega un <strong>Pointer pair</strong> desde la paleta: aparecen un <em>Pointer in</em> y un <em>Pointer out</em>.</li>
+  <li>Conecta la nueva entrada (por ejemplo un componente Sliders) al Pointer in.</li>
+  <li>Arrastra la salida del Pointer in hasta la entrada de la capa donde empieza el tramo. Esa capa conserva su propio cable; el enlace aparece como un cable azul punteado a su lado.</li>
+  <li>Conecta la capa donde termina el tramo al Pointer out. Su salida es el resultado del tramo sobre la nueva entrada.</li>
+</ol>
+<p>Los gradientes pasan por ambas ejecuciones hacia los pesos compartidos. El tramo no puede tomar entradas de fuera de él (salvo la de su primera capa).</p>
+</section>
+
+<section id="analisis">
+<h2><span class="n">11</span>PCA y gráficas</h2>
+<p><strong>PCA</strong> toma lo que le llega (aplana cada muestra). <strong>Fit</strong> hace pasar por la red las primeras <em>Fit on</em> muestras de entrenamiento del componente Data que la alimenta, calcula su media y covarianza, y guarda las <em>Components</em> direcciones principales; la ventana de información muestra cuánta varianza explica cada una. Después hace pasar todo el conjunto hacia los componentes Data y las gráficas que tenga a continuación. Una vez ajustada es una proyección fija, así que la muestra en pantalla, las inferencias y el entrenamiento también pasan por ella; en la exportación a PyTorch es un <code>nn.Linear</code> congelado.</p>
+<figure class="shot"><img src="../img/autoencoder.png" alt="Un autoencoder en Netgraph: su capa del medio de 16 unidades pasa por una PCA hacia una gráfica 2D donde los dígitos de MNIST forman grupos de colores; abajo, un componente Sliders alimenta el decodificador a través de un par de punteros y su salida se ve como un dígito generado."></figure>
+<figcaption>Un autoencoder: la capa del medio → PCA (2 componentes) → Plot 2D, coloreado por el dígito real. Abajo, un par de punteros ejecuta el decodificador entrenado sobre 16 deslizadores.</figcaption>
+</section>
+
+<section id="recetas">
+<h2><span class="n">12</span>Recetas</h2>
+<h3>Ver el espacio latente de un autoencoder</h3>
+<p>Construye Data (aplanado) → Dense 128 → ReLU → Dense 16 → ReLU → Dense 128 → ReLU → Dense 784 → Sigmoid, agrega un Loss <code>mse(sigmoid1, data1)</code> y entrena. Conecta la ReLU de 16 unidades a una PCA (2 o 3 componentes) y la PCA a un Plot 2D o 3D, y pulsa <strong>Fit and project</strong> en la PCA.</p>
+<h3>Sonda lineal</h3>
+<p>Recolecta una capa oculta en un componente Data, conéctalo a una sola capa Dense de 10 salidas con un Loss <code>ce(…)</code> y entrena. La exactitud en prueba indica qué tan linealmente se pueden leer las etiquetas a esa profundidad.</p>
+<h3>Ver los pesos de una neurona como imagen</h3>
+<p>Pon en la celda de entrada de un Unflatten <code>fc1[3].pre_weights</code>, su forma en <code>1,28,28</code>, y activa el modo vista: los 784 pesos que entran a la neurona 3 como una imagen.</p>
+<h3>Apagar o dirigir neuronas</h3>
+<p>Alimenta una capa desde una celda de entrada como <code>relu1 * (1 - sliders1)</code> para apagar neuronas, o <code>relu2 + a*sliders1</code> para empujar en una dirección, y mira cómo cambia la predicción.</p>
+</section>
+
+<section id="archivos">
+<h2><span class="n">13</span>Guardar y exportar</h2>
+<ul>
+  <li><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) descarga un archivo JSON del proyecto con la red, tus bloques y los pesos entrenados. <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) o soltar el archivo en el lienzo lo carga. Los conjuntos de datos se mencionan, no se incluyen.</li>
+  <li><strong>Export PyTorch</strong> escribe un <code>torch.nn.Module</code> con las mismas capas, un <code>forward()</code> que además guarda cada valor intermedio, y las expresiones de pérdida como código de torch. Descarga el código y un archivo <code>.safetensors</code> con los pesos, y luego:</li>
+</ul>
+<pre><code>from safetensors.torch import load_file
+from netgraph_model import Net
+
+model = Net()
+model.load_state_dict(load_file("netgraph_weights.safetensors"))</code></pre>
+</section>
+
+<section id="teclas">
+<h2><span class="n">14</span>Teclado y ratón</h2>
+<div class="tbl"><table>
+<thead><tr><th>Teclas</th><th>Acción</th></tr></thead>
+<tbody>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd></td><td>Copiar, cortar, pegar (con sus pesos entrenados)</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>Seleccionar todo en este grafo</td></tr>
+<tr><td><kbd>G</kbd> / <kbd>Shift</kbd>+<kbd>G</kbd></td><td>Agrupar en un bloque / desagrupar</td></tr>
+<tr><td><kbd>V</kbd></td><td>Modo vista para la selección</td></tr>
+<tr><td><kbd>Delete</kbd></td><td>Borrar la selección o el cable seleccionado</td></tr>
+<tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Muestra anterior / siguiente (con un componente Data seleccionado)</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Quitar la selección, o salir de un bloque</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Guardar / abrir un archivo de proyecto</td></tr>
+<tr><td>Rueda, arrastrar</td><td>Zoom, desplazar (el botón central también desplaza)</td></tr>
+<tr><td><kbd>Shift</kbd>/<kbd>Ctrl</kbd>+arrastrar</td><td>Recuadro de selección</td></tr>
+<tr><td>Doble clic</td><td>Abrir un bloque o las neuronas de una capa Dense</td></tr>
+</tbody></table></div>
+<p>En Mac, usa <kbd>⌘</kbd> en lugar de <kbd>Ctrl</kbd>.</p>
+</section>
+
+<section id="desarrollo">
+<h2><span class="n">15</span>Desarrollo</h2>
+<p>La app es un solo archivo HTML construido a partir de <code>src/</code>, sin dependencias.</p>
+<pre><code>git clone https://github.com/AtarraIA/netgraph
+cd netgraph
+node build.mjs     # escribe "Netgraph_ compose neural networks.html"
+npm test           # reconstruye y ejecuta todas las pruebas</code></pre>
+<ul>
+  <li><code>src/engine/</code>: el núcleo sin DOM (modelo del grafo, inferencia de formas, conjuntos de datos, expresiones, pesos, pasos hacia adelante y hacia atrás por lotes, entrenamiento, PCA, exportación a PyTorch). El mismo código se ejecuta en la página, en el proceso de entrenamiento en segundo plano y en las pruebas.</li>
+  <li><code>src/ui/</code>: la página (lienzo, componentes, ventana de información, vista de neuronas, gráficas, edición, controles de entrenamiento).</li>
+  <li><code>tests/</code>: pruebas del motor con verificación numérica de gradientes para cada tipo de capa, y pruebas de paridad con PyTorch (necesitan <code>python3</code> con <code>torch</code> y <code>safetensors</code>; si no, se omiten).</li>
+</ul>
+</section>
+</main>
+</div>
+<footer>Netgraph · <a href="https://github.com/AtarraIA">Semillero AtarraIA</a> · <a href="../" lang="en">English</a></footer>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Netgraph · Documentation</title>
+<meta name="description" content="Netgraph: compose neural networks as a graph, train them on MNIST in the browser, look inside every layer, and export them to PyTorch.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cg stroke='%23fff' stroke-width='2' fill='none'%3E%3Ccircle cx='8' cy='9' r='3'/%3E%3Ccircle cx='8' cy='23' r='3'/%3E%3Ccircle cx='24' cy='16' r='3'/%3E%3Cpath d='M11 10l10 5M11 22l10-5'/%3E%3C/g%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><g stroke="#fff" stroke-width="2" fill="none"><circle cx="8" cy="9" r="3"/><circle cx="8" cy="23" r="3"/><circle cx="24" cy="16" r="3"/><path d="M11 10l10 5M11 22l10-5"/></g></svg><span>NETGRAPH</span></a>
+  <nav>
+    <a class="hide-sm" href="#start">Start</a>
+    <a class="hide-sm" href="#components">Components</a>
+    <a class="hide-sm" href="#expressions">Expressions</a>
+    <a class="hide-sm" href="https://github.com/AtarraIA/netgraph">GitHub</a>
+    <a href="es/" lang="es" hreflang="es">Español</a>
+    <a class="btn" href="app/">Open the app</a>
+  </nav>
+</header>
+
+<div class="wrap">
+<aside class="toc" aria-label="Contents">
+  <b>Contents</b>
+  <a href="#start">Getting started</a>
+  <a href="#canvas">The canvas</a>
+  <a href="#views">Looking inside</a>
+  <a href="#components">Components</a>
+  <a href="#expressions">Expressions</a>
+  <a href="#variables">Variables and sliders</a>
+  <a href="#blocks">Blocks</a>
+  <a href="#training">Training</a>
+  <a href="#data">Data, inference and collecting</a>
+  <a href="#pointers">Pointer pairs</a>
+  <a href="#analysis">PCA and plots</a>
+  <a href="#recipes">Recipes</a>
+  <a href="#files">Saving and exporting</a>
+  <a href="#keys">Keyboard and mouse</a>
+  <a href="#dev">Development</a>
+</aside>
+
+<main>
+<div class="hero">
+  <h1>Compose neural networks.<br>Watch them think.</h1>
+  <p class="lead">Netgraph is a neural-network sandbox that runs entirely in the browser. Wire layers together like a node editor, train them on MNIST, look at every activation and every neuron, and export the result as PyTorch code with its weights.</p>
+  <div class="cta"><a class="btn" href="app/">Open the app →</a><a class="btn ghost" href="https://github.com/AtarraIA/netgraph">Source on GitHub</a></div>
+  <figure class="shot"><img src="img/classifier.png" alt="A trained MNIST classifier in Netgraph: a Data component showing a handwritten digit, Dense and ReLU layers showing their activations as coloured strips, the Softmax output as bars, and the loss curve."></figure>
+</div>
+
+<div class="cards">
+  <div class="card" style="--c:var(--dense)"><span class="sw"></span><h4>Build by wiring</h4><p>Layers, blocks, merges and reshapes, with shapes checked as you connect.</p></div>
+  <div class="card" style="--c:var(--act)"><span class="sw"></span><h4>See every activation</h4><p>Any component can show what flows out of it. Dense layers open into their neurons.</p></div>
+  <div class="card" style="--c:var(--loss)"><span class="sw"></span><h4>Train in the browser</h4><p>Losses are expressions over components. Adam or SGD, batched, off the main thread.</p></div>
+  <div class="card" style="--c:var(--ptr)"><span class="sw"></span><h4>Analyse</h4><p>Collect activations, run PCA, plot them in 2D or 3D, reuse trained parts with pointers.</p></div>
+</div>
+
+<section id="start">
+<h2><span class="n">01</span>Getting started</h2>
+<ol class="steps">
+  <li><a href="app/">Open the app</a>. On this site MNIST (70,000 handwritten digits) loads by itself; the first time takes a few seconds.</li>
+  <li>Press <strong>Load example</strong> in the top bar for a small convolutional classifier, or start from the empty canvas: click <strong>Data</strong> in the palette on the left, then <strong>Dense</strong>, <strong>ReLU</strong> and another <strong>Dense</strong>. Each one you click is added after the selected component and wired to it.</li>
+  <li>Select the Data component and tick <strong>Flatten</strong> so the 28×28 image becomes 784 features for the Dense layers. Set the last Dense layer's <strong>Output features</strong> to 10, one score per digit.</li>
+  <li>Add a <strong>Loss</strong> (palette, <em>Training</em>). With the last layer selected it starts as <code>ce(fc2)</code>: cross-entropy of those scores against the true labels.</li>
+  <li>Press <strong>▶ Train</strong> on the Loss. The curve fills in as it trains; after each epoch the test accuracy appears.</li>
+  <li>Select a layer and press <kbd>V</kbd> to see its activations, or double-click a Dense layer to see its neurons. Step through samples with <kbd>←</kbd> <kbd>→</kbd> on the Data component.</li>
+</ol>
+<div class="note"><p>Everything runs locally in your browser: nothing is uploaded. The network, your blocks and trained weights are kept in the browser's storage; use <strong>Save</strong> to keep a project file.</p></div>
+</section>
+
+<section id="canvas">
+<h2><span class="n">02</span>The canvas</h2>
+<p>The window has three parts: the <strong>palette</strong> on the left, the <strong>canvas</strong> in the middle and the <strong>info window</strong> on the right, which shows the selected component's shapes, settings and activations.</p>
+<ul>
+  <li><strong>Add</strong> a component by clicking it in the palette (it is placed and wired after the selected one) or by dragging it onto the canvas.</li>
+  <li><strong>Wire</strong> by dragging from an output port (right) to an input port (left). Shapes are checked: a connection that doesn't fit is refused with the reason. Ports slide around their component to face what they connect to.</li>
+  <li><strong>Bend</strong> a wire by dragging it; double-click it to straighten. Select a wire and press <kbd>Delete</kbd> to remove it.</li>
+  <li><strong>Select</strong> by clicking; <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-click adds to the selection; <kbd>Shift</kbd>- or <kbd>Ctrl</kbd>-drag on empty canvas draws a selection box (or use <strong>Select area</strong>).</li>
+  <li><strong>Resize</strong> a component from its bottom-right corner; double-click the corner to reset.</li>
+  <li><strong>Every input is a cell.</strong> In the info window each input shows the name of what is wired to it. Type another component's name to rewire, or type an expression (like <code>fc1[0:10] * 2</code>) to feed the input with computed values instead of a wire.</li>
+  <li>Each component shows its shapes, like <code>784 → 128</code>, and explains problems in place (in red), such as a shape mismatch or a missing input.</li>
+</ul>
+</section>
+
+<section id="views">
+<h2><span class="n">03</span>Looking inside</h2>
+<h3>View mode</h3>
+<p>Press <kbd>V</kbd> (or the dot at a component's bottom-left, or <strong>View activations</strong>) to turn a component into a view of what it outputs for the sample on screen. Vectors are drawn as horizontal strips, feature maps as tiles, ten-way outputs as bars with the true label marked, and images in grayscale. Colours use a diverging map: blue for negative, black near zero, orange to white for positive.</p>
+<h3>Neurons</h3>
+<p>Double-click a Dense layer (or zoom into it past the limit) to see it as neurons and weights. The <strong>Layers / Neurons</strong> switch at the top shows a whole MLP this way. Hover a neuron to highlight its connections; its value for the current sample is in its colour.</p>
+<figure class="shot"><img src="img/neurons.png" alt="The neuron view of a trained MLP: columns of circles for the input, hidden and output neurons, coloured by their activation, with lines for the weights."></figure>
+<h3>Blocks</h3>
+<p>Double-click a block (or zoom into it) to open it; the trail at the top leads back out. <kbd>Esc</kbd> goes up one level.</p>
+</section>
+
+<section id="components">
+<h2><span class="n">04</span>Components</h2>
+<div class="tbl"><table>
+<thead><tr><th>Component</th><th>What it does</th><th>Settings</th></tr></thead>
+<tbody>
+<tr class="grp"><td colspan="3">Data</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Data</td><td>Supplies samples of a dataset, with their labels, and holds a train/test split. With something wired into its input it <em>collects</em>: during an inference run it keeps everything that reaches it (see <a href="#data">Data</a>). Its box shows what it holds, like <code>70,000 × 1×28×28</code>.</td><td>Dataset, Flatten, Test split (%), Shuffle seed; Inference: Samples from, How many</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Sliders</td><td>Outputs a vector of hand-set values, the same for every sample. Training never changes them.</td><td>Each slider's name, min, step, max</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Input / Output</td><td>A fixed-shape input with no data (for building and export), and the marker for what the network returns.</td><td>Input shape, like <code>1,28,28</code></td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Plot 2D</td><td>Scatter plot of what reaches it: the sample on screen as a ring, a matrix's rows as points, and every sample an inference run sends through it, coloured by label.</td><td>Horizontal axis, Vertical axis (value indices)</td></tr>
+<tr><td><span class="fam" style="--c:#fff"></span>Plot 3D</td><td>The same in 3D. In view mode and in the info window, drag to turn the camera, scroll to zoom, <kbd>Shift</kbd>-drag to move, double-click to reset.</td><td>Three axes</td></tr>
+<tr class="grp"><td colspan="3">Layers</td></tr>
+<tr><td><span class="fam" style="--c:var(--dense)"></span>Dense</td><td>Fully connected layer on the last dimension. With nothing wired in, it takes its input directly (set Input features).</td><td>Input features (auto), Output features, Use bias</td></tr>
+<tr><td><span class="fam" style="--c:var(--conv)"></span>Conv2D</td><td>2D convolution over C×H×W.</td><td>Input channels (auto), Output channels (a number or <code>same</code>), Kernel, Stride, Padding</td></tr>
+<tr><td><span class="fam" style="--c:var(--pool)"></span>MaxPool2D / AvgPool2D</td><td>Pooling windows over each channel.</td><td>Kernel, Stride (auto = kernel)</td></tr>
+<tr><td><span class="fam" style="--c:var(--pool)"></span>Global Avg Pool</td><td>Averages each channel's map to one value.</td><td></td></tr>
+<tr><td><span class="fam" style="--c:var(--act)"></span>Activation</td><td>Any function of <code>x</code> typed as a formula, like <code>max(x, a*x)</code>; other names become sliders. ReLU, GELU, Sigmoid, Tanh and Softmax are the same component with their formula filled in, and run (and export) as the built-in versions.</td><td>Function of x</td></tr>
+<tr><td><span class="fam" style="--c:var(--norm)"></span>BatchNorm</td><td>Batch normalization (1D or 2D), with running statistics like PyTorch: batch statistics while training, running ones otherwise.</td><td></td></tr>
+<tr><td><span class="fam" style="--c:var(--norm)"></span>Dropout</td><td>Drops values while training only.</td><td>Drop probability</td></tr>
+<tr class="grp"><td colspan="3">Shape and merge</td></tr>
+<tr><td><span class="fam" style="--c:var(--shape)"></span>Flatten / Unflatten</td><td>To a vector, and back to any shape with the same number of values.</td><td>Unflatten: Output shape (<code>auto</code>, or like <code>32,7,7</code>; one <code>-1</code> is worked out)</td></tr>
+<tr><td><span class="fam" style="--c:var(--merge)"></span>Add / Concat</td><td>Two inputs (a, b): element-wise sum, or joined along the first dimension.</td><td></td></tr>
+<tr><td><span class="fam" style="--c:var(--ptr)"></span>Pointer pair</td><td>Runs a stretch of the network again on another input, with the same weights (see <a href="#pointers">Pointer pairs</a>).</td><td>Pointer in: Feeds · Pointer out: Pointer in</td></tr>
+<tr><td><span class="fam" style="--c:var(--shape)"></span>PCA</td><td>Principal component analysis of what reaches it. <strong>Fit</strong> learns the components; afterwards it projects each sample onto them (see <a href="#analysis">PCA</a>).</td><td>Components, Fit on (samples)</td></tr>
+<tr class="grp"><td colspan="3">Training and blocks</td></tr>
+<tr><td><span class="fam" style="--c:var(--loss)"></span>Loss</td><td>An expression over components; <strong>Train</strong> minimizes it. Shows the loss curve.</td><td>Expression, Optimizer, Learning rate, Batch size, Epochs</td></tr>
+<tr><td><span class="fam" style="--c:#F2F4F8"></span>Block</td><td>A group of components with one input and one output, opened by double-click. Built-ins: MLP, Conv block, Residual block; save your own to <em>My blocks</em>.</td><td>Block variables (in its Block input)</td></tr>
+</tbody></table></div>
+<p>Components go anywhere, inside blocks too, including Data and Loss.</p>
+</section>
+
+<section id="expressions">
+<h2><span class="n">05</span>Expressions</h2>
+<p>Losses, input cells, activation functions and pointer settings use one small expression language over components. A component's name stands for its output for the current sample (or batch).</p>
+<div class="tbl"><table>
+<thead><tr><th>Write</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>fc1</code></td><td>The output of the component named fc1. Names are looked up in the expression's own graph first, then in each block around it.</td></tr>
+<tr><td><code>MLP.fc2</code>, <code>"MLP 2".fc1</code></td><td>A component inside a block (quote names with spaces).</td></tr>
+<tr><td><code>fc1[3]</code>, <code>fc1[0:10]</code>, <code>conv1[2, :, 5]</code></td><td>One value, a slice, or several dimensions at once (counting from 0).</td></tr>
+<tr><td><code>fc1[3].pre_weights</code></td><td>The weights into neuron 3 (a vector, one per input). Without an index, <code>fc1.pre_weights</code> is the whole neurons × inputs matrix.</td></tr>
+<tr><td><code>fc1[3].post_weights</code></td><td>The weights from neuron 3 into the next Dense layer.</td></tr>
+<tr><td><code>+ − * / ^</code></td><td>Element-wise arithmetic; numbers and one-value results broadcast.</td></tr>
+<tr><td><code>abs log exp sqrt tanh sigmoid relu softmax</code></td><td>Element-wise functions (softmax over the values).</td></tr>
+<tr><td><code>sum mean max min</code></td><td>Reductions; <code>max(a, b)</code> and <code>min(a, b)</code> with two inputs are element-wise.</td></tr>
+<tr><td><code>ce(scores)</code>, <code>nll(probs)</code></td><td>Cross-entropy against the data's true labels, from raw scores or from probabilities.</td></tr>
+<tr><td><code>mse(a, b)</code></td><td>Mean squared error.</td></tr>
+</tbody></table></div>
+<p>Type a name or a dot for suggestions (<kbd>Ctrl</kbd>+<kbd>Space</kbd> opens them). When a component is renamed, grouped or ungrouped, every expression naming it is updated. A loss with many values is averaged.</p>
+<pre><code>ce(fc3)                                  # classification
+mse(recon, data1)                        # autoencoder reconstruction
+ce(fc3) + 0.001*sum(fc1.pre_weights^2)   # with weight decay on fc1
+mean(abs(relu2)) * 0.01 + mse(dec, x)    # sparse code</code></pre>
+</section>
+
+<section id="variables">
+<h2><span class="n">06</span>Variables and sliders</h2>
+<ul>
+  <li><strong>In expressions</strong>, a plain name that isn't a component becomes a variable with a slider (on the component and in the info window), like <code>k</code> in <code>fc1[k]</code> or <code>alpha</code> in <code>max(x, alpha*x)</code>. Its min, step and max are editable; the <kbd>‹</kbd> <kbd>›</kbd> buttons step it. A whole input cell that is just an unknown name is treated as a typo instead, with a suggestion.</li>
+  <li><strong>In settings</strong>, a name in a number field (like <code>n</code> in Output features) also becomes a slider.</li>
+  <li><strong>Block variables</strong> are declared in a block's <em>Block input</em> as <code>name = value</code> rows. A number becomes a slider on the block; an expression can use the rows above it. Layers inside the block can use these names.</li>
+  <li>The <strong>Sliders</strong> component turns sliders into a vector output, for feeding values into a network by hand.</li>
+</ul>
+</section>
+
+<section id="blocks">
+<h2><span class="n">07</span>Blocks</h2>
+<p>Select several components and press <kbd>G</kbd> to group them into a block; <kbd>Shift</kbd>+<kbd>G</kbd> ungroups. A block has one input and one output; inside, they are the <em>Block input</em> and <em>Block output</em> terminals. A block that holds its own Data component needs no input. <strong>Save to my blocks</strong> keeps a block in the palette for reuse.</p>
+</section>
+
+<section id="training">
+<h2><span class="n">08</span>Training</h2>
+<ul>
+  <li>A <strong>Loss</strong> has no input wires: its expression names what it uses. The samples come from the Data component upstream of those names, and only its <em>train</em> split is used for training.</li>
+  <li><strong>Train</strong> runs in a background worker, so the page stays responsive. The curve shows the smoothed training loss and, after each epoch, the loss on (up to 2,000) test samples, with accuracy for classification losses. Select the Loss and drag its chart to pan, scroll to zoom, double-click to see it all.</li>
+  <li><strong>Evaluate on test set</strong> scores the whole test split. <strong>Reset weights</strong> starts over from fresh random weights.</li>
+  <li>Adam (PyTorch defaults) or SGD with momentum 0.9; weights start like PyTorch's defaults. A test suite checks outputs, gradients, BatchNorm statistics and optimizer steps against real PyTorch.</li>
+  <li>Several losses can coexist; one loss may use another's value.</li>
+</ul>
+</section>
+
+<section id="data">
+<h2><span class="n">09</span>Data, inference and collecting</h2>
+<p><strong>Import data</strong> reads IDX files (the MNIST format, gzipped or not): pick an images file together with its labels file, or drop them on the canvas. The dataset is kept in the browser. Each Data component shuffles it with its seed and holds out a test share.</p>
+<h3>Collecting activations</h3>
+<p>A Data component with something wired into its input <strong>collects</strong>. Wire, for example, the middle layer of an autoencoder into a new Data component. Then select the Data component the flow starts from and, under <strong>Inference</strong>, choose <em>Samples from</em> (test split, train split or whole dataset) and <em>How many</em>, and press <strong>▶ Run inference</strong>. The collecting component keeps every sample that reached it, with its true label, as a dataset of its own: you can step through it, view it, plot it, or train another network on it. Plots wired downstream are filled the same way.</p>
+</section>
+
+<section id="pointers">
+<h2><span class="n">10</span>Pointer pairs</h2>
+<p>A pointer pair runs a stretch of the network again, on a different input, with the same weights. Typical use: feed a trained decoder from sliders, without cutting it off from its encoder.</p>
+<ol class="steps">
+  <li>Add a <strong>Pointer pair</strong> from the palette: a <em>Pointer in</em> and a <em>Pointer out</em> appear.</li>
+  <li>Wire the new input (for example a Sliders component) into the Pointer in.</li>
+  <li>Drag the Pointer in's output onto the input of the layer where the stretch starts. That layer keeps its own wire; the link shows as a dashed blue wire beside it.</li>
+  <li>Wire the layer where the stretch ends into the Pointer out. Its output is the stretch's result on the new input.</li>
+</ol>
+<p>Gradients flow through both runs into the shared weights. The stretch must not take inputs from outside it (other than its first layer's).</p>
+</section>
+
+<section id="analysis">
+<h2><span class="n">11</span>PCA and plots</h2>
+<p><strong>PCA</strong> takes whatever reaches it (it flattens each sample). <strong>Fit</strong> runs the first <em>Fit on</em> train samples of the Data component upstream through the network, computes their mean and covariance, and keeps the top <em>Components</em> principal directions; the info window shows how much variance each explains. Then it runs the whole dataset through into any Data components and plots after it. Once fitted it is a fixed projection, so the sample on screen, inference runs and training flow through it too; in the PyTorch export it is a frozen <code>nn.Linear</code>.</p>
+<figure class="shot"><img src="img/autoencoder.png" alt="An autoencoder in Netgraph: its 16-unit middle layer goes through a PCA into a Plot 2D where MNIST digits form coloured clusters; below, a Sliders component drives the decoder through a pointer pair and its output is shown as a generated digit."></figure>
+<figcaption>An autoencoder: the middle layer → PCA (2 components) → Plot 2D, coloured by the true digit. Below, a pointer pair reruns the trained decoder on 16 sliders.</figcaption>
+</section>
+
+<section id="recipes">
+<h2><span class="n">12</span>Recipes</h2>
+<h3>See an autoencoder's latent space</h3>
+<p>Build Data (flattened) → Dense 128 → ReLU → Dense 16 → ReLU → Dense 128 → ReLU → Dense 784 → Sigmoid, add a Loss <code>mse(sigmoid1, data1)</code> and train. Wire the 16-unit ReLU into a PCA (2 or 3 components) and the PCA into a Plot 2D or 3D, then press <strong>Fit and project</strong> on the PCA.</p>
+<h3>Linear probe</h3>
+<p>Collect a hidden layer into a Data component, wire it into a single Dense layer with 10 outputs and a Loss <code>ce(…)</code>, and train. The test accuracy says how linearly the labels can be read at that depth.</p>
+<h3>Read a neuron's weights as an image</h3>
+<p>Set an Unflatten's input cell to <code>fc1[3].pre_weights</code>, its shape to <code>1,28,28</code>, and turn on view mode: the 784 weights into neuron 3 as a picture.</p>
+<h3>Ablate or steer</h3>
+<p>Feed a layer from an input cell such as <code>relu1 * (1 - sliders1)</code> to switch neurons off, or <code>relu2 + a*sliders1</code> to push along a direction, and watch the prediction change.</p>
+</section>
+
+<section id="files">
+<h2><span class="n">13</span>Saving and exporting</h2>
+<ul>
+  <li><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) downloads a JSON project file with the network, your blocks and the trained weights. <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) or dropping the file on the canvas loads it. Datasets are referred to, not included.</li>
+  <li><strong>Export PyTorch</strong> writes a <code>torch.nn.Module</code> with the same layers, a <code>forward()</code> that also keeps every intermediate value, and the loss expressions as torch code. Download the code and a <code>.safetensors</code> file of the weights, then:</li>
+</ul>
+<pre><code>from safetensors.torch import load_file
+from netgraph_model import Net
+
+model = Net()
+model.load_state_dict(load_file("netgraph_weights.safetensors"))</code></pre>
+</section>
+
+<section id="keys">
+<h2><span class="n">14</span>Keyboard and mouse</h2>
+<div class="tbl"><table>
+<thead><tr><th>Keys</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Undo / redo</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd></td><td>Copy, cut, paste (trained weights come along)</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicate</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>Select everything in this graph</td></tr>
+<tr><td><kbd>G</kbd> / <kbd>Shift</kbd>+<kbd>G</kbd></td><td>Group into a block / ungroup</td></tr>
+<tr><td><kbd>V</kbd></td><td>View mode for the selection</td></tr>
+<tr><td><kbd>Delete</kbd></td><td>Delete the selection or the selected wire</td></tr>
+<tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next sample (Data component selected)</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Clear the selection, or go up out of a block</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Save / open a project file</td></tr>
+<tr><td>Scroll, drag</td><td>Zoom, pan (middle button pans too)</td></tr>
+<tr><td><kbd>Shift</kbd>/<kbd>Ctrl</kbd>-drag</td><td>Selection box</td></tr>
+<tr><td>Double-click</td><td>Open a block or a Dense layer's neurons</td></tr>
+</tbody></table></div>
+<p>On a Mac, use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>.</p>
+</section>
+
+<section id="dev">
+<h2><span class="n">15</span>Development</h2>
+<p>The app is a single HTML file built from <code>src/</code>, with no dependencies.</p>
+<pre><code>git clone https://github.com/AtarraIA/netgraph
+cd netgraph
+node build.mjs     # writes "Netgraph_ compose neural networks.html"
+npm test           # rebuild, then run every test</code></pre>
+<ul>
+  <li><code>src/engine/</code>: the DOM-free core (graph model, shape inference, datasets, expressions, weights, batched forward and backward passes, training, PCA, PyTorch export). The same code runs on the page, in the training worker and in the tests.</li>
+  <li><code>src/ui/</code>: the page (canvas, components, info window, neuron view, plots, editing, training controls).</li>
+  <li><code>tests/</code>: engine tests with numerical gradient checks for every layer type, and PyTorch parity tests (they need <code>python3</code> with <code>torch</code> and <code>safetensors</code>, and are skipped otherwise).</li>
+</ul>
+</section>
+</main>
+</div>
+<footer>Netgraph · <a href="https://github.com/AtarraIA">Semillero AtarraIA</a> · <a href="es/" lang="es">Español</a></footer>
+</body>
+</html>
