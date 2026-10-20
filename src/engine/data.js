@@ -1,23 +1,25 @@
-/* Netgraph engine: datasets. An imported dataset is {id, name, h, w, classes, n, images:Uint8Array, labels:Uint8Array}.
+/* Netgraph engine: datasets. An imported dataset is {id, name, c, h, w, classes, n, images:Uint8Array, labels}: c channels
+   (1 for grayscale, 3 for RGB; missing means 1), each image stored channel by channel, and labels as a Uint8Array, or a
+   Uint16Array for more than 256 classes.
    A collected one (what reached a Data component's input during an inference run) is {id, name, shape, classes, n,
    x:Float32Array, labels, owner (the collecting component's id), from (where the samples came from)}. */
 
 /* ---------- datasets ---------- */
 let datasets = [];
-   // {id, name, h, w, classes, n, images:Uint8Array, labels:Uint8Array}
 const dsById = id => datasets.find(d => d.id === id) || null;
+const imgShape = ds => [ds.c || 1, ds.h, ds.w];
 function joinParts(base, parts){
-  const px = base.h*base.w, n = parts.reduce((a, p) => a + p.n, 0), images = new Uint8Array(n*px), labels = new Uint8Array(n);
+  const px = sizeOf(imgShape(base)), n = parts.reduce((a, p) => a + p.n, 0), images = new Uint8Array(n*px), labels = new (base.classes > 256 ? Uint16Array : Uint8Array)(n);
   let o = 0; for (const p of parts){ images.set(p.images, o*px); labels.set(p.labels, o); o += p.n; }
   const {splits, ...rest} = base;
   return {...rest, n, images, labels};
 }
-const dsShape = (ds, flatten) => { const s = ds.x ? ds.shape : [1, ds.h, ds.w]; return flatten ? [sizeOf(s)] : s; };
+const dsShape = (ds, flatten) => { const s = ds.x ? ds.shape : imgShape(ds); return flatten ? [sizeOf(s)] : s; };
 function sampleAt(ds, i, flatten){
   if (ds.x){ const S = sizeOf(ds.shape); return {pixels:null, t:tensor(dsShape(ds, flatten), 1, ds.x.slice(i*S, (i + 1)*S), [ds.labels[i]])}; }
-  const px = ds.h*ds.w, pixels = ds.images.subarray(i*px, (i+1)*px), data = new Float32Array(px);
+  const px = sizeOf(imgShape(ds)), pixels = ds.images.subarray(i*px, (i+1)*px), data = new Float32Array(px);
   for (let k = 0; k < px; k++) data[k] = pixels[k] / 255;
-  return {pixels, t:tensor(flatten ? [px] : [1, ds.h, ds.w], 1, data, [ds.labels[i]])};
+  return {pixels, t:tensor(dsShape(ds, flatten), 1, data, [ds.labels[i]])};
 }
 function sampleOf(n){
   const ds = dsById(n.props.dataset); if (!ds || (n._collect && !ds.x)) return null;   // a collecting component shows only what it collected
@@ -50,11 +52,11 @@ function batchOf(ds, idxs, flatten){
     for (let b = 0; b < B; b++){ data.set(ds.x.subarray(idxs[b]*S, (idxs[b] + 1)*S), b*S); labels[b] = ds.labels[idxs[b]]; }
     return tensor(dsShape(ds, flatten), B, data, labels);
   }
-  const px = ds.h*ds.w, B = idxs.length, data = new Float32Array(B*px), labels = new Int32Array(B);
+  const px = sizeOf(imgShape(ds)), B = idxs.length, data = new Float32Array(B*px), labels = new Int32Array(B);
   for (let b = 0; b < B; b++){
     const o = idxs[b]*px;
     for (let k = 0; k < px; k++) data[b*px + k] = ds.images[o + k]/255;
     labels[b] = ds.labels[idxs[b]];
   }
-  return tensor(flatten ? [px] : [1, ds.h, ds.w], B, data, labels);
+  return tensor(dsShape(ds, flatten), B, data, labels);
 }

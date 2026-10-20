@@ -59,14 +59,15 @@ function nodeHTML(n){
   else if (n._act) extra = n.type === 'output' && isPred(n._act) ? predHTML(n._act) : n.type === 'output' ? '' : actHTML(n._act);
   const vt = `<button class="vt" data-view="${n.id}" aria-pressed="${!!n.view}" aria-label="${n.view ? 'Show the layer' : 'Show activations'}" title="View activations (V)"></button>`;
   const sz = sizeStyle(n), rz = '<div class="rz" title="Drag to resize · double-click to reset"></div>';
-  if (n.view) return `<div class="node view${n.type === 'loss' ? ' lv' : n.type === 'sliders' ? ' sld' : PLOTS.has(n.type) ? ' plt' : ''}${sel.has(n.id)?' sel':''}${r.err?' bad':''}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--fam:${FAM[d.fam]};${sz}">
+  const f = runFrac(n), busy = f == null ? '' : ' busy', bar = runBar(f);   // still computing: the old result, dimmed, under a progress bar
+  if (n.view) return `<div class="node view${n.type === 'loss' ? ' lv' : n.type === 'sliders' ? ' sld' : PLOTS.has(n.type) ? ' plt' : ''}${sel.has(n.id)?' sel':''}${r.err?' bad':''}${busy}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--fam:${FAM[d.fam]};${sz}">${bar}
     <div class="vw">${viewPanels(n)}</div>
     <div class="mcap"><div class="mt"><span class="mk"></span>${title}<small>${sub}</small></div><div class="nshape">${shape}</div>${msg}</div>
     ${n._vars && n._vars.length ? nodeVarsHTML(n) : ''}${n.type === 'sliders' ? slidersRows(n) : ''}${n.type === 'data' && !r.err ? stepperHTML(n) : ''}${n.type === 'loss' ? `<div class="lrow">${lossBody(n, true)}</div>` : ''}${ports}${vt}${rz}</div>`;
-  if (isNet(n)) return `<div class="node net${isG?' grp':''}${sel.has(n.id)?' sel':''}${r.err?' bad':''}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--fam:${FAM[d.fam]};${sz}" title="Double-click to see its neurons">
+  if (isNet(n)) return `<div class="node net${isG?' grp':''}${sel.has(n.id)?' sel':''}${r.err?' bad':''}${busy}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--fam:${FAM[d.fam]};${sz}" title="Double-click to see its neurons">${bar}
     ${miniNet(n)}<div class="mcap"><div class="mt"><span class="mk"></span>${title}<small>${sub}</small></div><div class="nshape">${shape}</div>${r.params ? `<div class="np">${fmtN(r.params)} params</div>` : ''}${msg}</div>
     ${n._vars && n._vars.length ? nodeVarsHTML(n) : ''}${ports}${vt}${rz}</div>`;
-  return `<div class="node${isG?' grp':''}${n.type === 'sliders' ? ' sld' : PLOTS.has(n.type) ? ' plt' : ''}${sel.has(n.id)?' sel':''}${r.err?' bad':''}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--fam:${FAM[d.fam]};min-height:${Math.max(86, PY0+(d.ins-1)*PSTEP+26)}px;${sz}">
+  return `<div class="node${isG?' grp':''}${n.type === 'sliders' ? ' sld' : PLOTS.has(n.type) ? ' plt' : ''}${sel.has(n.id)?' sel':''}${r.err?' bad':''}${busy}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;--fam:${FAM[d.fam]};min-height:${Math.max(86, PY0+(d.ins-1)*PSTEP+26)}px;${sz}">${bar}
     <div class="nh"><span class="nt">${title}</span><span class="nn">${sub}</span></div>
     <div class="nb">${r.sum ? `<div class="ns">${esc(r.sum)}</div>` : ''}<div class="nshape">${shape}</div>${r.params ? `<div class="np">${fmtN(r.params)} params</div>` : ''}${extra}${msg}</div>
     ${n._vars && n._vars.length ? nodeVarsHTML(n) : ''}${ports}${vt}${rz}</div>`;

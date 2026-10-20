@@ -40,14 +40,18 @@ const divCSS = a => `rgb(${divRGB(a).join(',')})`;
 const paint = (px, i, a) => { const [r, g, b] = divRGB(a); px[i] = r; px[i+1] = g; px[i+2] = b; px[i+3] = 255; };
 const amax = v => { let m = 0; for (const x of v){ const y = Math.abs(x); if (y > m) m = y; } return m || 1; };
 const CBAR = `<div class="cbar"><i></i><span>−max</span><span>0</span><span>+max</span></div>`;
-// A Data component's sample: an imported image in grayscale; a collected one (any values) in activation colors.
+// A Data component's sample: an imported image as it is (grayscale or RGB); a collected one (any values) in activation colors.
 function sampleHTML(s, big){
-  if (s.pixels) return pic(sampleURL(s), big ? 'dbig' : 'dimg', `A handwritten ${s.label}`);
+  if (s.pixels) return pic(sampleURL(s), big ? 'dbig' : 'dimg', s.ds.name === 'MNIST' ? `A handwritten ${s.label}` : `An image labelled ${s.label}`);
   const t = s.t;
   if (t.shape.length === 3){ let g = ''; for (let c = 0; c < Math.min(big ? 16 : 4, t.shape[0]); c++) g += pic(mapURL(t, c), '', `Channel ${c+1}`); return `<div class="chgrid${big ? '' : ' sm'}">${g}</div>`; }
   return pic(vecURL(t.data, big ? 128 : 64), 'act v');
 }
-function sampleURL(s){ return toURL(s.ds.w, s.ds.h, px => { for (let i = 0; i < s.pixels.length; i++) gray(px, i*4, s.pixels[i]/255); }); }
+function sampleURL(s){
+  const {w, h} = s.ds, hw = w*h, v = s.pixels;
+  if ((s.ds.c || 1) !== 3) return toURL(w, h, px => { for (let i = 0; i < hw; i++) gray(px, i*4, v[i]/255); });
+  return toURL(w, h, px => { for (let i = 0; i < hw; i++){ px[i*4] = v[i]; px[i*4+1] = v[hw + i]; px[i*4+2] = v[2*hw + i]; px[i*4+3] = 255; } });
+}
 // Raw input pixels (0 to 1) in grayscale, for the Data component.
 function grayURL(t, c){ const [, h, w] = t.shape, v = t.data.subarray(c*h*w, (c+1)*h*w); return toURL(w, h, px => { for (let i = 0; i < v.length; i++) gray(px, i*4, Math.max(0, Math.min(1, v[i]))); }); }
 function mapURL(t, c){
@@ -74,8 +78,7 @@ function montageURL(t, max=16){
 function panel(t, label){
   let inner = '';
   if (t && isPred(t)){
-    const [lo, hi] = range(t.data), am = argmax(t.data);
-    inner = `<div class="pred">${[...t.data].map((x, i) => `<span class="pb${i === am ? ' hi' : ''}${i === t.label ? ' lab' : ''}" title="${i}: ${x.toFixed(3)}"><s><i style="height:${Math.round(3 + 97*norm(x, Math.min(0, lo), hi))}%"></i></s><b>${i}</b></span>`).join('')}</div>`;
+    inner = `<div class="pred">${predBars(t, t.label)}</div>`;
   } else if (t) inner = pic(tensorURL(t), t.shape.length === 3 ? '' : 'strip');
   return `<div class="pn${t ? '' : ' empty'}"><span class="pl">${label}</span>${inner}</div>`;
 }
@@ -95,15 +98,22 @@ function actHTML(t){
   for (let c = 0; c < C; c++) h += pic(mapURL(t, c));
   return `<div class="act m">${h}${t.shape[0] > C ? `<span>+${t.shape[0]-C}</span>` : ''}</div>`;
 }
-const isPred = t => t && t.shape.length === 1 && t.data.length <= 20;
+const dsClasses = () => { const dn = root.nodes.find(m => m.type === 'data'), ds = dn && dsById(dn.props.dataset); return ds ? ds.classes : 0; };
+// A vector reads as class scores when it's short, or has one score per class of the dataset in use (like ImageNet's 1000).
+const isPred = t => t && t.shape.length === 1 && (t.data.length <= 20 || t.data.length === dsClasses());
+const PRED_TOP = 5;   // a longer vector shows only its highest scores
+const topK = (v, k) => Array.from(v.keys()).sort((i, j) => v[j] - v[i]).slice(0, k);
+function predBars(t, lab){
+  const v = t.data, [lo, hi] = range(v), am = argmax(v), show = v.length > 20 ? topK(v, PRED_TOP) : [...v.keys()];
+  return show.map(i => `<span class="pb${i === am ? ' hi' : ''}${i === lab ? ' lab' : ''}" title="${i}: ${v[i].toFixed(3)}"><s><i style="height:${Math.round(3 + 97*norm(v[i], Math.min(0, lo), hi))}%"></i></s><b>${i}</b></span>`).join('');
+}
 function predHTML(t, big){
-  const v = t.data, [lo, hi] = range(v), am = argmax(v);
+  const v = t.data, am = argmax(v);
   // Only a vector with one score per class of the dataset in use is read as a prediction.
-  const dn = root.nodes.find(m => m.type === 'data'), ds = dn && dsById(dn.props.dataset), isClass = ds && v.length === ds.classes, lab = isClass ? t.label : undefined;
-  let bars = '';
-  v.forEach((x, i) => bars += `<span class="pb${i === am ? ' hi' : ''}${i === lab ? ' lab' : ''}" title="${i}: ${x.toFixed(3)}"><s><i style="height:${Math.round(3 + 97*norm(x, Math.min(0, lo), hi))}%"></i></s><b>${i}</b></span>`);
+  const isClass = v.length === dsClasses(), lab = isClass ? t.label : undefined, bars = predBars(t, lab);
   if (!isClass) return `<div class="pred${big ? ' big' : ''}">${bars}</div>`;
-  const verdict = lab === undefined ? '' : am === lab ? '<em class="ok">✓ matches the label</em>' : `<em class="no">label is ${lab}</em>`;
+  const inTop = v.length > 20 && lab !== undefined && am !== lab && topK(v, PRED_TOP).includes(lab);
+  const verdict = lab === undefined ? '' : am === lab ? '<em class="ok">✓ matches the label</em>' : `<em class="no">label is ${lab}${inTop ? ` (in the top ${PRED_TOP})` : ''}</em>`;
   return `<div class="pred${big ? ' big' : ''}">${bars}</div><div class="pv">Predicts<b>${am}</b>${verdict}</div>`;
 }
 function actPanel(n){

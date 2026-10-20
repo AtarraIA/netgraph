@@ -1,7 +1,8 @@
 /* Netgraph engine: running the network.
    A tensor holds B samples of one shape back to back: {shape (one sample's), B, data, labels}. labels[b] is
    sample b's class when the data has labels; a one-sample tensor also keeps it as .label for the UI.
-   forward() runs the sample shown on screen; fwdT/bwdT run a training batch forward and backward. */
+   forward() runs the sample shown on screen (forwardSteps does the same a step at a time, for the page to show
+   results as they come); fwdT/bwdT run a training batch forward and backward. */
 const sizeOf = s => s.reduce((a, b) => a*b, 1);
 function tensor(shape, B, data, labels){
   const t = {shape, B, data, labels:labels || null};
@@ -16,31 +17,7 @@ const now = () => typeof performance !== 'undefined' ? performance.now() : Date.
 function runNode(n, ins, mode){
   const x = ins[0], p = n._p || n.props, X = x.data, B = x.B, S = X.length/B, out = (shape, data) => tensor(shape, B, data, x.labels);
   switch (n.type){
-    case 'dense': {
-      const fi = lastDim(x.shape), fo = lastDim(n._out), rows = X.length/fi, P = weightsOf(n, fi*fo, fo, fi), W = P.W, Y = new Float32Array(rows*fo);
-      for (let r = 0; r < rows; r++) for (let o = 0; o < fo; o++){
-        let s = p.bias ? P.B[o] : 0;
-        for (let i = 0, wo = o*fi, xo = r*fi; i < fi; i++) s += W[wo+i]*X[xo+i];
-        Y[r*fo+o] = s;
-      }
-      return out(n._out, Y);
-    }
-    case 'conv2d': {
-      const [c,h,w] = x.shape, [co,ho,wo] = n._out, k = +p.kernel, st = +p.stride, pd = +p.padding;
-      const P = weightsOf(n, co*c*k*k, co, c*k*k), W = P.W, Y = new Float32Array(B*co*ho*wo);
-      for (let bt = 0; bt < B; bt++){
-        const xo = bt*c*h*w, yo = bt*co*ho*wo;
-        for (let o = 0; o < co; o++) for (let i = 0; i < ho; i++) for (let j = 0; j < wo; j++){
-          let s = P.B[o];
-          for (let ci = 0; ci < c; ci++) for (let a = 0; a < k; a++){
-            const y = i*st - pd + a; if (y < 0 || y >= h) continue;
-            for (let b = 0; b < k; b++){ const xx = j*st - pd + b; if (xx >= 0 && xx < w) s += W[((o*c+ci)*k+a)*k+b]*X[xo + (ci*h+y)*w+xx]; }
-          }
-          Y[yo + (o*ho+i)*wo+j] = s;
-        }
-      }
-      return out(n._out, Y);
-    }
+    case 'dense': case 'conv2d': { const it = layerSteps(n, ins); let r; while (!(r = it.next()).done); return r.value; }
     case 'maxpool': case 'avgpool': {
       const [c,h,w] = x.shape, [,ho,wo] = n._out, k = +p.kernel, st = isAuto(p.stride) ? k : +p.stride, mx = n.type === 'maxpool', Y = new Float32Array(B*c*ho*wo);
       for (let bt = 0; bt < B; bt++){
@@ -190,15 +167,21 @@ function exprInputBack(ctx, n, i, gx, getT){
 
 // The sample shown on screen, through every layer a Data component reaches. Sets n._act (output) and
 // n._actIn (inputs) on every node, and n._lossNow on Loss blocks. BatchNorm uses its running statistics.
-function forward(g, ginT){
+function forward(g, ginT){ const it = forwardSteps(g, ginT); let r; while (!(r = it.next()).done); return r.value; }
+// The on-screen run, a step at a time. Yields {id, frac} as a component makes progress and {id, done:true} once its
+// result (n._act) is in; a block also yields its own progress, by how many of its components are done. Each component
+// keeps its previous result until its turn comes, so the page can show the old one meanwhile.
+function* forwardSteps(g, ginT){
   let res = null;
-  g.nodes.forEach(n => { n._act = null; n._actIn = null; n._lossNow = null; });
+  const seen = new Set();
   for (const n of topo(g)){
+    seen.add(n.id); n._act = null; n._actIn = null; n._lossNow = null;
     const d = DEFS[n.type], ins = new Array(d.ins).fill(null);
     for (const e of g.edges) if (e.to === n.id && e.port < d.ins && wired(n, e.port)){ const s = byId(g, e.from); ins[e.port] = s ? s._act : null; }
     if (n._r && !n._r.err) for (let i = 0; i < d.ins; i++) if (portExpr(n, i)) try { ins[i] = exprInput(n, i, m => m._act, 1); } catch(e){ ins[i] = null; }
     if (n.type === 'loss'){
       try { if (n._r && !n._r.err){ const r = exprEval(n, n.props.expr, m => m._act, 1); n._lossNow = r.Ls[0]; n._act = tensor([1], 1, r.Ls, r.labels); } } catch(e){}
+      yield {id:n.id, done:true};
       continue;
     }
     let t = null;
@@ -208,12 +191,27 @@ function forward(g, ginT){
     else if (n.type === 'ptrout'){ const x = n._ptr && n._r && !n._r.err && n._ptr.I._act; try { t = x ? runPointer(n, x) : null; } catch(e){ t = null; } }   // the stretch again, on its Pointer in's input
     else if (d.ins && !n._src && n._r && !n._r.err && !n._r.wait && ins.every(Boolean)){
       n._actIn = ins;
-      try { t = n.type === 'group' ? forward(n.graph, ins[0]) : runNode(n, ins); } catch(e){ t = null; }
-    } else if (n.type === 'group') forward(n.graph, null);
+      try {
+        if (n.type === 'group') t = yield* blockSteps(n, ins[0]);
+        else if (n.type === 'dense' || n.type === 'conv2d'){ const it = layerSteps(n, ins); let r; while (!(r = it.next()).done) yield {id:n.id, frac:r.value}; t = r.value; }
+        else t = runNode(n, ins);
+      } catch(e){ t = null; }
+    } else if (n.type === 'group') yield* blockSteps(n, null);
     n._act = t;
     if (n.type === 'gout') res = t;
+    yield {id:n.id, done:true};
   }
+  for (const n of g.nodes) if (!seen.has(n.id)){ n._act = null; n._actIn = null; n._lossNow = null; }   // not reached (a cycle)
   return res;
+}
+function* blockSteps(n, x){
+  const it = forwardSteps(n.graph, x), N = n.graph.nodes.length || 1;
+  let k = 0, r;
+  while (!(r = it.next()).done){
+    const e = r.value; yield e;
+    if (n.graph.nodes.some(m => m.id === e.id)){ if (e.done) k++; yield {id:n.id, frac:(k + (e.done ? 0 : e.frac))/N}; }
+  }
+  return r.value;
 }
 
 /* ---------- training ---------- */
@@ -267,6 +265,96 @@ function fwdT(g, ginT, xT, ctx){
   }
   return res;
 }
+// Dense and Conv2D, a few output units (or channels) at a time: yields the fraction done after each slice of about
+// LAYER_SLICE multiply-adds, and returns the output.
+const LAYER_SLICE = 1e6;
+function* layerSteps(n, ins){
+  const x = ins[0], p = n._p || n.props, X = x.data, B = x.B;
+  if (n.type === 'dense'){
+    const fi = lastDim(x.shape), fo = lastDim(n._out), rows = X.length/fi, P = weightsOf(n, fi*fo, fo, fi), Y = new Float32Array(rows*fo);
+    const step = Math.max(1, Math.floor(LAYER_SLICE/(rows*fi)));
+    for (let o0 = 0; o0 < fo; o0 += step){ denseUnits(P, !!p.bias, X, Y, rows, fi, fo, o0, Math.min(fo, o0 + step)); if (o0 + step < fo) yield (o0 + step)/fo; }
+    return tensor(n._out, B, Y, x.labels);
+  }
+  // Conv2D as a matrix product per sample: Y[o, p] = bias[o] + Σ_q W[o, q]·patch[p, q], where patch p is the input under
+  // the kernel at output position p (im2col), q runs over in-channel × kernel row × kernel column, as W does.
+  const [c,h,w] = x.shape, [co,ho,wo] = n._out, k = +p.kernel, st = +p.stride, pd = +p.padding, K = c*k*k, N = ho*wo;
+  const P = weightsOf(n, co*K, co, K), Y = new Float32Array(B*co*N), cols = new Float32Array(N*K);
+  const step = Math.min(co, Math.max(4, 4*Math.floor(LAYER_SLICE/(4*N*K))));
+  for (let bt = 0; bt < B; bt++){
+    im2colT(X, bt*c*h*w, c, h, w, k, st, pd, ho, wo, cols);
+    const Yb = Y.subarray(bt*co*N, (bt + 1)*co*N);
+    for (let o0 = 0; o0 < co; o0 += step){
+      const o1 = Math.min(co, o0 + step);
+      matmulNT(P.W.subarray(o0*K, o1*K), o1 - o0, cols, N, K, Yb.subarray(o0*N), N, 1, P.B.subarray(o0, o1), false);
+      if (bt < B - 1 || o1 < co) yield (bt*co + o1)/(B*co);
+    }
+  }
+  return tensor(n._out, B, Y, x.labels);
+}
+// The patches under a k×k kernel, one row per output position: cols[p*K + q] (zero where the kernel overhangs the padding).
+function im2colT(X, xo, c, h, w, k, st, pd, ho, wo, cols){
+  const K = c*k*k;
+  for (let i = 0; i < ho; i++) for (let j = 0; j < wo; j++){
+    let r = (i*wo + j)*K;
+    for (let ci = 0; ci < c; ci++) for (let a = 0; a < k; a++){
+      const y = i*st - pd + a, xr = xo + (ci*h + y)*w, inY = y >= 0 && y < h;
+      for (let b = 0; b < k; b++){ const xx = j*st - pd + b; cols[r++] = inY && xx >= 0 && xx < w ? X[xr + xx] : 0; }
+    }
+  }
+}
+// The reverse: adds each patch's values back where they came from (patches overlap, so values add up).
+function col2imT(cols, gx, xo, c, h, w, k, st, pd, ho, wo){
+  for (let i = 0; i < ho; i++) for (let j = 0; j < wo; j++){
+    let r = (i*wo + j)*c*k*k;
+    for (let ci = 0; ci < c; ci++) for (let a = 0; a < k; a++){
+      const y = i*st - pd + a, xr = xo + (ci*h + y)*w, inY = y >= 0 && y < h;
+      for (let b = 0; b < k; b++, r++){ const xx = j*st - pd + b; if (inY && xx >= 0 && xx < w) gx[xr + xx] += cols[r]; }
+    }
+  }
+}
+/* Y[m*ym + n*yn] = bias[m] + Σ_k A[m*K + k]·Bt[n*K + k] (or += without the bias when add): the product of A (M×K)
+   with Bt (N×K) transposed, both read along k. Done in 4×4 blocks with the 16 sums in registers, which needs far
+   fewer memory reads than one dot product at a time. Sums run in k order in double precision, as a plain loop would. */
+function matmulNT(A, M, Bt, N, K, Y, ym, yn, bias, add){
+  let m = 0;
+  for (; m + 4 <= M; m += 4){
+    const a0 = m*K, a1 = a0 + K, a2 = a1 + K, a3 = a2 + K;
+    let n = 0;
+    for (; n + 4 <= N; n += 4){
+      const c0 = n*K, c1 = c0 + K, c2 = c1 + K, c3 = c2 + K;
+      let s00 = 0, s01 = 0, s02 = 0, s03 = 0, s10 = 0, s11 = 0, s12 = 0, s13 = 0, s20 = 0, s21 = 0, s22 = 0, s23 = 0, s30 = 0, s31 = 0, s32 = 0, s33 = 0;
+      for (let q = 0; q < K; q++){
+        const w0 = A[a0+q], w1 = A[a1+q], w2 = A[a2+q], w3 = A[a3+q], x0 = Bt[c0+q], x1 = Bt[c1+q], x2 = Bt[c2+q], x3 = Bt[c3+q];
+        s00 += w0*x0; s01 += w0*x1; s02 += w0*x2; s03 += w0*x3;
+        s10 += w1*x0; s11 += w1*x1; s12 += w1*x2; s13 += w1*x3;
+        s20 += w2*x0; s21 += w2*x1; s22 += w2*x2; s23 += w2*x3;
+        s30 += w3*x0; s31 += w3*x1; s32 += w3*x2; s33 += w3*x3;
+      }
+      put(Y, m*ym + n*yn, yn, s00, s01, s02, s03, bias ? bias[m] : 0, add);
+      put(Y, (m+1)*ym + n*yn, yn, s10, s11, s12, s13, bias ? bias[m+1] : 0, add);
+      put(Y, (m+2)*ym + n*yn, yn, s20, s21, s22, s23, bias ? bias[m+2] : 0, add);
+      put(Y, (m+3)*ym + n*yn, yn, s30, s31, s32, s33, bias ? bias[m+3] : 0, add);
+    }
+    for (; n < N; n++) for (let r = 0; r < 4; r++) dotInto(A, (m + r)*K, Bt, n*K, K, Y, (m + r)*ym + n*yn, bias ? bias[m + r] : 0, add);
+  }
+  for (; m < M; m++) for (let n = 0; n < N; n++) dotInto(A, m*K, Bt, n*K, K, Y, m*ym + n*yn, bias ? bias[m] : 0, add);
+}
+function put(Y, i, yn, s0, s1, s2, s3, b, add){
+  if (add){ Y[i] += s0; Y[i + yn] += s1; Y[i + 2*yn] += s2; Y[i + 3*yn] += s3; }
+  else { Y[i] = b + s0; Y[i + yn] = b + s1; Y[i + 2*yn] = b + s2; Y[i + 3*yn] = b + s3; }
+}
+function dotInto(A, ao, Bt, bo, K, Y, i, b, add){ let s = 0; for (let q = 0; q < K; q++) s += A[ao + q]*Bt[bo + q]; if (add) Y[i] += s; else Y[i] = b + s; }
+const transpose = (X, R, C, out = new Float32Array(R*C)) => { for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) out[c*R + r] = X[r*C + c]; return out; };
+function denseUnits(P, bias, X, Y, rows, fi, fo, o0, o1){
+  const W = P.W;
+  for (let r = 0; r < rows; r++) for (let o = o0; o < o1; o++){
+    let s = bias ? P.B[o] : 0;
+    for (let i = 0, wo = o*fi, xo = r*fi; i < fi; i++) s += W[wo+i]*X[xo+i];
+    Y[r*fo+o] = s;
+  }
+}
+
 // A pointer pair's stretch, run on x with its own record of inputs and outputs (the stretch also runs in the main flow) but
 // the same weights and weight gradients. Without ctx it runs as at inference, for the screen.
 function runPointer(n, x, ctx){
@@ -319,17 +407,18 @@ function backNode(n, ins, y, gy, ctx){
     }
     case 'conv2d': {
       const [c,h,w] = x.shape, [co,ho,wo] = n._out, k = +p.kernel, st = +p.stride, pd = +p.padding;
-      const P = weightsOf(n, co*c*k*k, co, c*k*k), G = pgrad(ctx, P), W = P.W, gx = new Float32Array(X.length);
+      // As matrix products per sample, like the forward pass: dW[o, q] += Σ_p gy[o, p]·patch[p, q], and each patch's
+      // gradient Σ_o gy[o, p]·W[o, q] added back into gx where the patch came from.
+      const K = c*k*k, N = ho*wo, P = weightsOf(n, co*K, co, K), G = pgrad(ctx, P), gx = new Float32Array(X.length);
+      const cols = new Float32Array(N*K), colsT = new Float32Array(K*N), gyT = new Float32Array(N*co), WT = transpose(P.W, co, K), dcols = new Float32Array(N*K);
       for (let bt = 0; bt < B; bt++){
-        const xo = bt*c*h*w, yo = bt*co*ho*wo;
-        for (let o = 0; o < co; o++) for (let i = 0; i < ho; i++) for (let j = 0; j < wo; j++){
-          const g = gy[yo + (o*ho+i)*wo+j]; if (!g) continue;
-          G.B[o] += g;
-          for (let ci = 0; ci < c; ci++) for (let a = 0; a < k; a++){
-            const yy = i*st - pd + a; if (yy < 0 || yy >= h) continue;
-            for (let b = 0; b < k; b++){ const xx = j*st - pd + b; if (xx < 0 || xx >= w) continue; const wi = ((o*c+ci)*k+a)*k+b, xi = xo + (ci*h+yy)*w+xx; G.W[wi] += g*X[xi]; gx[xi] += g*W[wi]; }
-          }
-        }
+        const g = gy.subarray(bt*co*N, (bt + 1)*co*N);
+        for (let o = 0; o < co; o++){ let s = 0; for (let q = 0; q < N; q++) s += g[o*N + q]; G.B[o] += s; }
+        im2colT(X, bt*c*h*w, c, h, w, k, st, pd, ho, wo, cols); transpose(cols, N, K, colsT);
+        matmulNT(g, co, colsT, K, N, G.W, K, 1, null, true);
+        transpose(g, co, N, gyT);
+        matmulNT(gyT, N, WT, K, co, dcols, K, 1, null, false);
+        col2imT(dcols, gx, bt*c*h*w, c, h, w, k, st, pd, ho, wo);
       }
       return [gx];
     }

@@ -282,7 +282,7 @@ function varOf(el){ const n = byId(cur(), [...sel][0]); return n && n.props.vars
 // Refresh while a slider is being dragged. The component holding that slider keeps its elements (so the drag
 // continues) and only has its view panels redrawn; everything else is rebuilt.
 function refreshCanvas(holdId){
-  infer(); forward(root, null); renderNeuro();
+  infer(); runInference(holdId); renderNeuro();
   if (!holdId) renderNodes();
   else {
     for (const n of cur().nodes){

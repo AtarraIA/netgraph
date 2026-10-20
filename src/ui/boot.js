@@ -1,6 +1,6 @@
 
 /* ---------- boot ---------- */
-if (!load()) example();
+if (!load()) openDefault();   // a first visit opens the example autoencoder, trained
 renderPalette();
 render();
 flushSave();

@@ -1,5 +1,66 @@
-function render(){ infer(); forward(root, null); renderNeuro(); renderNodes(); renderWires(); renderInspector(); renderCrumbs(); save(); }
-function soft(){ infer(); forward(root, null); renderNeuro(); renderNodes(); renderWires(); renderInspector(); renderCrumbs(); save(); }
+function render(){ infer(); runInference(); renderNeuro(); renderNodes(); renderWires(); renderInspector(); renderCrumbs(); save(); }
+function soft(){ infer(); runInference(); renderNeuro(); renderNodes(); renderWires(); renderInspector(); renderCrumbs(); save(); }
+
+/* ---------- live inference ---------- */
+/* The sample on screen runs through the network a slice at a time (forwardSteps), with the page repainted between
+   slices, so it stays responsive and each component shows its result as soon as it has one. Until then a component
+   keeps its previous result, dimmed, under a progress bar. A small network finishes within the first slice, before
+   anything is drawn, so it never shows bars. A run is kept while nothing it depends on changes: clicking around
+   doesn't start it again, and any change to the network, the weights or the datasets starts it afresh. */
+const RUN_SLICE = 40;   // ms of work between repaints
+let run = null;   // {key, root, it, prog (id → fraction done, for the components still to come), done:Set, hold}
+const dsTag = new WeakMap(); let dsTags = 0;
+function runKey(){
+  const tag = d => { if (!dsTag.has(d)) dsTag.set(d, ++dsTags); return dsTag.get(d); };
+  const net = JSON.stringify(strip(root), (k, v) => k === 'x' || k === 'y' || k === 'w' || k === 'view' || k === 'bend' ? undefined : v);
+  return `${wver}|${datasets.map(tag).join(',')}|${net}`;
+}
+// Starts a run unless the current one still holds (then it carries on, or has finished). Returns whether every
+// result is in. hold: the id of a component whose elements must stay while a slider on it is dragged.
+function runInference(hold = null){
+  const key = runKey();
+  const kept = run && run.key === key && run.root === root && (run.prog.size || everyRan(root));
+  if (kept){ run.hold = hold; return !run.prog.size; }
+  const prog = new Map(); (function all(g){ for (const n of g.nodes){ prog.set(n.id, 0); if (n.graph) all(n.graph); } })(root);
+  run = {key, root, it:forwardSteps(root, null), prog, done:new Set(), hold};
+  if (!slice(run)) return true;
+  run.done.clear();   // the first paint draws everything anyway
+  setTimeout(() => continueRun(run), 0);   // the browser repaints between tasks when a frame is due
+  return false;
+}
+const everyRan = g => g.nodes.every(n => n._act !== undefined && (!n.graph || everyRan(n.graph)));   // components loaded since have no result yet
+// Runs until the time is up; returns whether there's more to do.
+function slice(r){
+  const t0 = performance.now();
+  for (;;){
+    const s = r.it.next();
+    if (s.done){ r.prog.clear(); return false; }
+    const e = s.value;
+    if (e.done){ r.prog.delete(e.id); r.done.add(e.id); } else r.prog.set(e.id, e.frac);
+    if (performance.now() - t0 > RUN_SLICE) return true;
+  }
+}
+function continueRun(r){
+  if (r !== run) return;   // a newer run took over
+  const more = slice(r), g = cur(), selId = sel.size === 1 ? [...sel][0] : null;
+  let moved = false, inspNow = false;
+  for (const n of g.nodes){
+    const el = nodesEl.querySelector(`.node[data-id="${n.id}"]`); if (!el) continue;
+    if (r.done.has(n.id)){
+      if (n.id === r.hold){ el.classList.remove('busy'); el.querySelector('.runbar')?.remove(); const vw = el.querySelector('.vw'); if (vw){ vw.innerHTML = viewPanels(n); paintViz(vw); } }
+      else { el.outerHTML = nodeHTML(n); const ne = nodesEl.querySelector(`.node[data-id="${n.id}"]`); if (ne) paintViz(ne); }
+      moved = true; if (n.id === selId) inspNow = true;
+    } else if (r.prog.has(n.id)){ const i = el.querySelector('.runbar i'); if (i) i.style.width = `${Math.round(100*r.prog.get(n.id))}%`; }
+  }
+  r.done.clear();
+  if (moved){ layoutPorts(); renderWires(); }
+  if (!more){ renderNeuro(); renderInspector(); return; }
+  if (inspNow) renderInspector();
+  setTimeout(() => continueRun(r), 0);
+}
+// A component still waiting for its result: its progress bar (nodeHTML puts it above the component).
+const runFrac = n => run && run.root === root && run.prog.has(n.id) ? run.prog.get(n.id) : null;
+const runBar = f => f == null ? '' : `<div class="runbar" role="progressbar" aria-label="Computing" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(100*f)}"><i style="width:${Math.round(100*f)}%"></i></div>`;
 
 /* ---------- persistence ---------- */
 const KEY = 'netgraph.v1';
@@ -67,18 +128,17 @@ function arrive(){
   cv.classList.remove('enter'); void cv.offsetWidth; cv.classList.add('enter');
   if (nview && !nview.id && !hinted){ hinted = true; toast('Neuron view. Switch to Layers at the top left to edit.'); }
 }
+// Going back up to a level shows it the way it was last switched there (Layers unless Neurons was picked).
 function pickMode(){
   if (!neuronModel(cur())) return null;
-  const m = modes[path.join('/')];
-  if (m) return m === 'neurons' ? {id:null} : null;
-  return path.length && mlpLike(cur()) ? {id:null} : null;
+  return modes[path.join('/')] === 'neurons' ? {id:null} : null;
 }
 function enter(id){
   const n = byId(cur(), id); if (!n) return;
   if (n.type === 'dense') return enterLayer(id);
   if (n.type !== 'group') return;
-  views[vkey()] = {...view}; path.push(id); nview = null; sel.clear(); selWire = null;
-  infer(); nview = pickMode(); arrive();
+  views[vkey()] = {...view}; path.push(id); nview = null; sel.clear(); selWire = null;   // a block always opens on its layers
+  delete modes[path.join('/')]; infer(); arrive();
 }
 function enterLayer(id){
   const n = byId(cur(), id);
@@ -300,6 +360,13 @@ function saveToLib(id){
 }
 
 /* ---------- example ---------- */
+// The project bundled into the page (see build.mjs): the graph and its trained weights, which are also stored so they
+// survive a reload. Falls back to the classifier example if it can't be read.
+function openDefault(){
+  let p; try { p = readProject(document.getElementById('default-project').textContent); } catch(e){ example(); return; }
+  root = p.graph; lib = p.blocks; path = []; nview = null; sel.clear(); selWire = null;
+  importWeights(p.weights); saveWeights();
+}
 function example(){
   root = {nodes:[], edges:[]}; path = []; nview = null; sel.clear(); selWire = null;
   const put = (n, x) => { n.x = x; n.y = 40; root.nodes.push(n); return n; };

@@ -8,6 +8,7 @@ export function loadEngine(){
   const ctx = vm.createContext({console, performance, setTimeout, TextEncoder, TextDecoder, structuredClone});
   for (const f of ENGINE) vm.runInContext(fs.readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'), ctx, {filename:f});
   const E = code => vm.runInContext(code, ctx);
+  E.ctx = ctx;
   // Seeded randomness (the VM has its own Math): ids, fresh weights, shuffles and dropout repeat run to run, so a
   // numerical gradient check can't land on a ReLU or max-pool switch point by bad luck on some runs.
   E('Math.random = rng(20261010)');

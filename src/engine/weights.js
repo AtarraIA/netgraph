@@ -2,7 +2,13 @@
    Every trainable layer's parameters live here by layer id: {key, W, B, trained}, plus for BatchNorm the
    running statistics rm (mean), rv (variance) and nbt (batches seen). key records the shape they were made
    for, so a layer whose shape changes gets fresh weights. */
-const wcache = new Map();
+// wver counts changes to it, so the page can tell whether a result it shows is still current.
+let wver = 0;
+const wcache = new class extends Map {
+  set(k, v){ wver++; return super.set(k, v); }
+  delete(k){ wver++; return super.delete(k); }
+  clear(){ wver++; return super.clear(); }
+}();
 
 // Fresh weights follow PyTorch's defaults (uniform ±1/√fan_in for weights and biases), seeded by the layer id
 // so they stay put. BatchNorm starts at scale 1 and shift 0, with running mean 0 and running variance 1.

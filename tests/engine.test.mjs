@@ -16,6 +16,46 @@ test('shapes: layers, unflatten and errors', () => {
   assert.match(E('u._r.err'), /holds 9 values, but the input has 64/);
 });
 
+test('datasets: RGB images and more than 256 classes', () => {
+  const E = loadEngine();
+  // two 2×2 RGB images, stored channel by channel, with labels past 255
+  E(`fresh(); datasets = [joinParts({id:'rgb', name:'RGB', c:3, h:2, w:2, classes:300}, [{n:2, images:Uint8Array.from({length:24}, (_, i) => i*10), labels:Uint16Array.of(299, 7)}])];
+     var d = P('data', {dataset:'rgb', test:0}), c = P('conv2d', {out_channels:1, kernel:1, padding:0}); wire(d, c); infer();`);
+  assert.equal(E('fmt(d._out)'), '3×2×2');
+  assert.equal(E('fmt(c._out)'), '1×2×2');
+  assert.equal(E('datasets[0].labels.constructor.name'), 'Uint16Array');
+  const b = JSON.parse(E(`JSON.stringify((t => ({shape:t.shape, labels:Array.from(t.labels), v:Array.from(t.data.subarray(12, 16))}))(batchOf(datasets[0], [1, 0], false)))`));
+  assert.deepEqual(b, {shape:[3, 2, 2], labels:[7, 299], v:[0, 10/255, 20/255, 30/255].map(Math.fround)});
+  assert.deepEqual(JSON.parse(E(`JSON.stringify(sampleAt(datasets[0], 0, true).t.shape)`)), [12]);
+});
+
+test('convolutions: the matrix-product version agrees with plain loops, forward and backward', () => {
+  const E = loadEngine();
+  // [in channels, size, out channels, kernel, stride, padding, batch]: channel and position counts that aren't multiples of 4 included
+  const cases = [[1, 8, 5, 3, 1, 1, 2], [3, 11, 7, 5, 2, 2, 3], [2, 6, 4, 1, 1, 0, 1], [4, 9, 6, 4, 3, 0, 2], [5, 7, 9, 3, 1, 2, 1]];
+  for (const [c, h, co, k, st, pd, B] of cases){
+    const worst = JSON.parse(E(`(() => {
+      fresh(); const r = rng(${c*100 + co}), rnd = n => Float32Array.from({length:n}, () => r()*2 - 1);
+      const x = P('input', {shape:'${c},${h},${h}'}), cv = P('conv2d', {out_channels:${co}, kernel:${k}, stride:${st}, padding:${pd}}); wire(x, cv); infer();
+      const [, ho, wo] = cv._out, K = ${c*k*k}, X = rnd(${B}*${c*h*h}), P0 = weightsOf(cv, ${co}*K, ${co}, K), gy = rnd(${B}*${co}*ho*wo);
+      const Y = runNode(cv, [tensor(x._out, ${B}, X)]).data, ctx = {pg:new Map()}, [gx] = backNode(cv, [tensor(x._out, ${B}, X)], null, gy, ctx), G = ctx.pg.get(P0);
+      // the plain loops this replaced
+      const c = ${c}, h = ${h}, w = ${h}, co = ${co}, k = ${k}, st = ${st}, pd = ${pd}, W = P0.W, Yr = new Float64Array(Y.length), gxr = new Float64Array(X.length), gW = new Float64Array(W.length), gB = new Float64Array(co);
+      for (let bt = 0; bt < ${B}; bt++) for (let o = 0; o < co; o++) for (let i = 0; i < ho; i++) for (let j = 0; j < wo; j++){
+        const yi = ((bt*co + o)*ho + i)*wo + j; let s = P0.B[o]; gB[o] += gy[yi];
+        for (let ci = 0; ci < c; ci++) for (let a = 0; a < k; a++) for (let b = 0; b < k; b++){
+          const yy = i*st - pd + a, xx = j*st - pd + b; if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+          const wi = ((o*c + ci)*k + a)*k + b, xi = ((bt*c + ci)*h + yy)*w + xx; s += W[wi]*X[xi]; gW[wi] += gy[yi]*X[xi]; gxr[xi] += gy[yi]*W[wi];
+        }
+        Yr[yi] = s;
+      }
+      const d = (a, b) => { let m = 0, sc = 1e-6; for (let i = 0; i < b.length; i++){ m = Math.max(m, Math.abs(a[i] - b[i])); sc = Math.max(sc, Math.abs(b[i])); } return m/sc; };
+      return JSON.stringify(Math.max(d(Y, Yr), d(gx, gxr), d(G.W, gW), d(G.B, gB)));
+    })()`));
+    assert.ok(worst < 1e-5, `${c}→${co} channels, ${k}×${k} kernel, stride ${st}, pad ${pd}, batch ${B}: differs by ${worst}`);
+  }
+});
+
 test('variables in layer settings', () => {
   const E = loadEngine(); toyDataset(E);
   E(`fresh(); var d = P('data', {dataset:'toy', flatten:true}), fc = P('dense', {out_features:'n'}); wire(d, fc); infer();`);

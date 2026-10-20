@@ -132,6 +132,10 @@ dialog::backdrop{background:rgba(0,0,0,.8);backdrop-filter:blur(2px)}
 dialog pre{margin:0;padding:14px 16px;overflow:auto;max-height:calc(86vh - 60px);font:12.5px/1.55 var(--mono);background:#000;color:#E6E9EF}
 
 /* network-icon nodes (MLP blocks, Dense layers) */
+/* while a component waits for its result: a progress bar above it, its previous result dimmed */
+.runbar{position:absolute;left:0;right:0;top:-13px;height:6px;border-radius:3px;background:rgba(255,255,255,.22);overflow:hidden;pointer-events:none}
+.runbar i{display:block;height:100%;background:#fff;box-shadow:var(--neon-sm);transition:width .12s linear}
+.node.busy > :not(.runbar):not(.port):not(.rz):not(.vt){opacity:.4;transition:opacity .2s}
 .node.net{background:transparent;border-color:transparent;box-shadow:none;min-height:0}
 .node.net:hover{border-color:rgba(255,255,255,.14);box-shadow:none}
 .node.net.sel{border-color:rgba(255,255,255,.35);box-shadow:0 0 14px rgba(255,255,255,.12)}

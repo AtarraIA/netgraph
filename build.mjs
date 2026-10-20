@@ -1,6 +1,7 @@
 // Builds the app into one self-contained HTML file (it opens straight from disk, no server needed):
 //   node build.mjs
-// The engine goes in <script id="engine">; the page also hands that same text to the training worker.
+// The engine goes in <script id="engine">; the page also hands that same text to the training worker. The project a
+// first visit opens (src/examples/autoencoder.json, a project file saved from the app) goes in <script id="default-project">.
 import fs from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
@@ -16,7 +17,8 @@ export function build(){
     .replace('{{STYLE}}', () => src('style.css').trimEnd())
     .replace('{{BODY}}', () => src('body.html').trimEnd())
     .replace('{{ENGINE}}', () => join(ENGINE))
-    .replace('{{UI}}', () => join(UI));
+    .replace('{{UI}}', () => join(UI))
+    .replace('{{DEFAULT}}', () => JSON.stringify(JSON.parse(src('examples/autoencoder.json'))).replace(/</g, '\\u003c'));   // < escaped, so no </script> can end the block
   fs.writeFileSync(OUT, html);
   return OUT;
 }
