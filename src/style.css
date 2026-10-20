@@ -80,6 +80,9 @@ button{cursor:pointer}
 .nshape .k{color:var(--muted);font-weight:400;text-shadow:none}
 .np{color:var(--muted);font-size:11.5px;margin-top:1px}
 .msg{font-size:11.5px;margin-top:4px;line-height:1.3}
+.dlmsg b{font:500 11px var(--mono);color:#fff;margin-left:2px}
+.dlbar{height:6px;margin-top:5px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+.dlbar i{display:block;height:100%;background:#fff;box-shadow:var(--neon-sm);transition:width .15s linear}
 .msg.err{color:var(--err);text-shadow:0 0 6px color-mix(in srgb,var(--err) 50%,transparent)} .msg.warn{color:var(--warn)} .msg.wait{color:var(--muted)}
 .port{position:absolute;width:11px;height:11px;border-radius:50%;background:#000;border:1.5px solid rgba(255,255,255,.7);cursor:crosshair;z-index:2;box-shadow:0 0 5px rgba(255,255,255,.35);transform:translate(-50%,-50%);transition:transform .1s,box-shadow .1s}
 .port::after{content:"";position:absolute;inset:-9px}

@@ -58,14 +58,34 @@ async function importFiles(list){
   render();
   toast(`${name} ready: ${ds.n.toLocaleString()} samples.${kept ? '' : ' (Your browser won\'t store it, so import again after reloading.)'}`);
 }
+// On the site, MNIST sits next to the app (data/mnist/) and loads by itself. Data components show the download's
+// progress meanwhile (dsLoading), and the usual error if it fails.
+const canFetch = () => /^https?:$/.test(location.protocol);
 async function autoFetch(){
-  if (!/^https?:$/.test(location.protocol) || dsById('mnist')) return;
+  if (!canFetch() || dsById('mnist')){ dsLoading = null; render(); return; }
   const names = ['train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz', 't10k-images-idx3-ubyte.gz', 't10k-labels-idx1-ubyte.gz'];
+  dsLoading = {id:'mnist', name:'MNIST', frac:0}; render();
+  const got = names.map(() => 0), size = names.map(() => 0);
+  const tick = () => { if (size.every(Boolean)){ dsLoading.frac = got.reduce((a, b) => a + b, 0)/size.reduce((a, b) => a + b, 0); paintLoading(); } };
   try {
-    const files = await Promise.all(names.map(async nm => { const r = await fetch('data/mnist/' + nm); if (!r.ok) throw new Error(nm); return new File([await r.blob()], nm); }));
+    const files = await Promise.all(names.map(async (nm, i) => {
+      const r = await fetch('data/mnist/' + nm); if (!r.ok) throw new Error(nm);
+      size[i] = Number(r.headers.get('content-length')) || 1;
+      const rd = r.body.getReader(), parts = [];
+      for (;;){ const {done, value} = await rd.read(); if (done) break; parts.push(value); got[i] += value.length; tick(); }
+      got[i] = size[i]; tick();
+      return new File(parts, nm);
+    }));
+    dsLoading.frac = 1; dsLoading.unpacking = true; paintLoading();
+    await new Promise(r => setTimeout(r, 0));   // let "Unpacking" show before the work starts
     await importFiles(files);
   } catch(e){}
+  dsLoading = null; render();
 }
+const loadingHTML = () => { const L = dsLoading || {name:'', frac:0}, pct = Math.round(100*L.frac);
+  return `<div class="msg wait dlmsg">${L.unpacking ? `Unpacking ${esc(L.name)}…` : `Loading ${esc(L.name)}… <b>${pct}%</b>`}</div><div class="dlbar" role="progressbar" aria-label="Loading ${esc(L.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>`; };
+// Updates the bars in place, without redrawing the canvas.
+function paintLoading(){ const html = loadingHTML(); for (const el of document.querySelectorAll('.dlmsg')){ el.nextElementSibling?.remove(); el.insertAdjacentHTML('afterend', html); el.remove(); } }
 function stepSample(n, how){
   const s = sampleOf(n); if (!s) return;
   n.props.index = how === 'rand' ? Math.floor(Math.random()*s.ds.n) : (s.i + (how === 'next' ? 1 : -1) + s.ds.n) % s.ds.n;

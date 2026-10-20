@@ -42,6 +42,7 @@ function inferNode(n, ins){
       if (x === null) return {wait:'Waiting for upstream layers.'};
       const ds = dsById(p.dataset), got = ds && (!n._collect || ds.x) ? ds : null;
       if (n._collect && !got) return {out:x, sum:'Collects what reaches it', warn:'Nothing collected yet. Run inference on the Data component the flow starts from.'};
+      if (!got && dsLoading && !n._collect && (!p.dataset || p.dataset === dsLoading.id)) return {wait:`Loading ${dsLoading.name}…`, loading:true};
       if (!got) return {err: datasets.length ? 'Pick a dataset.' : 'Import a dataset first (Import data, top bar).'};
       const pct = Number(p.test ?? 20), seed = Number(p.seed ?? 1);
       if (!(pct >= 0 && pct <= 90)) return {err:'Test split must be a percentage from 0 to 90.'};
@@ -224,7 +225,7 @@ function inferGraph(g, ginShape, scope = {}){
     const ins = new Array(d.ins).fill(undefined);
     for (const e of g.edges) if (e.to === n.id && e.port < d.ins && wired(n, e.port)){ const s = map.get(e.from); ins[e.port] = s ? s._out : undefined; }
     n._in = ins;
-    let r, exprErr = null;
+    let r, exprErr = null, exprWait = null;
     resolveProps(n, scope);
     for (let i = 0; i < d.ins; i++){   // inputs given by expressions take the shape of the expression's value
       const src = portExpr(n, i); if (!src) continue;
@@ -233,9 +234,10 @@ function inferGraph(g, ginShape, scope = {}){
         if (ast.k === 'ref' && !ast.idx && !ast.attr){ const lk = lookup(ast.key0, g); if (!lk.node) throw new Error(lk.err); }   // a lone unknown name is a typo, not a variable
         const sh = shapeOf(bindVars(ast, n), n, g, null); ins[i] = sh.length ? sh : [1];
       }
-      catch(e){ ins[i] = null; exprErr ||= `${d.ins > 1 ? 'Input ' + 'ab'[i] : 'Input'}: ${e.message}`; }
+      catch(e){ ins[i] = null; if (e.wait) exprWait ||= e.message; else exprErr ||= `${d.ins > 1 ? 'Input ' + 'ab'[i] : 'Input'}: ${e.message}`; }
     }
     if (exprErr) r = {err:exprErr};
+    else if (exprWait) r = {wait:exprWait};
     else if (n.type === 'gin') r = ginShape ? {out:ginShape} : {wait:'Connect the block on the outside to see shapes.'};
     else if (n.type === 'group'){
       const sub = inferGraph(n.graph, ins[0] || null, blockScope(n, scope));

@@ -144,6 +144,7 @@ function weightView(a, g=root){
   const rr = lookup(a.key0, g); if (rr.err) throw new Error(rr.err);
   const L = rr.node, gg = rr.graph;
   if (L.type !== 'dense') throw new Error(`.${a.attr} works on Dense layers, and ${a.plabel} is a ${L.type === 'group' ? 'block' : labelOf(L)}.`);
+  if ((!L._in || !L._in[0] || !L._out) && L._r && L._r.wait) throw Object.assign(new Error(`Waiting for ${a.plabel}.`), {wait:true});   // only waiting, not broken
   if (!L._in || !L._in[0] || !L._out) throw new Error(`${a.plabel} has no shape yet. Fix the issues before it first.`);
   const fi = lastDim(L._in[0]), fo = lastDim(L._out);
   const j = a._idx && a._idx[0].one;
@@ -238,6 +239,7 @@ function shapeOf(ast, n, g, ds, xShape){
         if (rr.err) throw new Error(rr.err);
         if (m === n) throw new Error(`${n.type === 'loss' ? 'A loss' : 'A component'} can't use its own value.`);
         const sh = m._out || ((m.type === 'output' || m.type === 'gout') && m._in && m._in[0]);
+        if (!sh && m._r && m._r.wait) throw Object.assign(new Error(`Waiting for ${a.label}.`), {wait:true});   // it's only waiting (for data, say), not broken
         if (!sh) throw new Error(`${a.label} has no output yet. Fix the issues before it first.`);
         if (!a._idx) return sh;
         selIndex(sh, a._idx, a.label);   // checks the indices
@@ -277,7 +279,7 @@ function checkLoss(n, g){
   let ast; try { ast = bindVars(parseLoss(n.props.expr), n); } catch(e){ n._srcData = null; return {err:e.message}; }
   n._srcData = null;
   for (const key of ast.refs){ const rr = lookup(key, g), d = rr.node && upstreamData(rr.graph, rr.node); if (d){ n._srcData = d; break; } }
-  let size; try { size = sizeOf(shapeOf(ast, n, g, n._srcData && dsById(n._srcData.props.dataset))); } catch(e){ return {err:e.message}; }
+  let size; try { size = sizeOf(shapeOf(ast, n, g, n._srcData && dsById(n._srcData.props.dataset))); } catch(e){ return e.wait ? {wait:e.message} : {err:e.message}; }
   if (!n._srcData) return {err:'None of the components it uses is fed by a Data component.'};
   return {out:[1], sum: size > 1 ? `Mean of ${size.toLocaleString()} values` : 'Single value'};
 }

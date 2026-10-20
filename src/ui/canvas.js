@@ -47,7 +47,7 @@ function nodeHTML(n){
   else if (hasExpr(n)) shape = `<span class="k">←</span> ${esc(exprsOf(n).join(', '))} <span class="ar">→</span> ${fmt(n._out)}`;   // inputs given by expressions
   else if (d.outs === 0) shape = `<span class="k">in</span> ${ins.join(', ')}`;
   else shape = `${ins.join(' + ')} <span class="ar">→</span> ${fmt(n._out)}`;
-  const msg = r.err ? `<div class="msg err">${esc(r.err)}</div>` : r.warn ? `<div class="msg warn">${esc(r.warn)}</div>` : r.wait ? `<div class="msg wait">${esc(r.wait)}</div>` : '';
+  const msg = r.err ? `<div class="msg err">${esc(r.err)}</div>` : r.warn ? `<div class="msg warn">${esc(r.warn)}</div>` : r.loading ? loadingHTML() : r.wait ? `<div class="msg wait">${esc(r.wait)}</div>` : '';
   let ports = '';
   for (let i = 0; i < d.ins; i++) if (wired(n, i)) ports += `<div class="port in" data-node="${n.id}" data-port="${i}" data-dir="in" style="left:0;top:${PY0+i*PSTEP}px" title="Input${d.ins>1?' '+'ab'[i]:''}">${d.ins>1?`<span class="pl">${'ab'[i]}</span>`:''}</div>`;
   if (d.outs) ports += `<div class="port out" data-node="${n.id}" data-dir="out" style="left:${W}px;top:${PY0}px" title="Output"></div>`;

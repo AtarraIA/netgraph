@@ -7,6 +7,7 @@
 /* ---------- datasets ---------- */
 let datasets = [];
 const dsById = id => datasets.find(d => d.id === id) || null;
+let dsLoading = null;   // a dataset the page is fetching: {id, name, frac (0..1 downloaded), unpacking}; Data components wait for it
 const imgShape = ds => [ds.c || 1, ds.h, ds.w];
 function joinParts(base, parts){
   const px = sizeOf(imgShape(base)), n = parts.reduce((a, p) => a + p.n, 0), images = new Uint8Array(n*px), labels = new (base.classes > 256 ? Uint16Array : Uint8Array)(n);
